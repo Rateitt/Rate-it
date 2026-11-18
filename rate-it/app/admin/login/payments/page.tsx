@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { createClient } from "@supabase/supabase-js";
 
 const supabase = createClient(
@@ -14,16 +16,6 @@ type TableData = {
   rows: Row[];
   error: string;
 };
-
-function formatValue(value: unknown): string {
-  if (value === null || value === undefined) return "—";
-
-  if (typeof value === "object") {
-    return JSON.stringify(value);
-  }
-
-  return String(value);
-}
 
 function RecordsSection({
   title,
@@ -55,15 +47,11 @@ function RecordsSection({
                 <th className="p-3">Details</th>
               </tr>
             </thead>
-
             <tbody>
               {data.rows.map((row, index) => (
-                <tr
-                  key={String(row.id ?? index)}
-                  className="border-b"
-                >
+                <tr key={String(row.id ?? index)} className="border-b">
                   <td className="p-3 font-semibold">
-                    {formatValue(row.id)}
+                    {String(row.id ?? "—")}
                   </td>
                   <td className="p-3">
                     <details>
@@ -86,6 +74,11 @@ function RecordsSection({
 }
 
 export default function PaymentsDashboard() {
+  const router = useRouter();
+
+  const [authorized, setAuthorized] = useState(false);
+  const [loading, setLoading] = useState(true);
+
   const [payments, setPayments] = useState<TableData>({
     rows: [],
     error: "",
@@ -101,45 +94,81 @@ export default function PaymentsDashboard() {
     error: "",
   });
 
-  const [loading, setLoading] = useState(true);
-
   async function loadRecords() {
     setLoading(true);
 
-    const results = await Promise.all([
-      supabase.from("payments").select("*").limit(100),
-      supabase.from("commissions").select("*").limit(100),
-      supabase.from("provider payouts").select("*").limit(100),
-    ]);
+    try {
+      const results = await Promise.all([
+        supabase.from("payments").select("*").limit(100),
+        supabase.from("commissions").select("*").limit(100),
+        supabase.from("provider payouts").select("*").limit(100),
+      ]);
 
-    const [paymentResult, commissionResult, payoutResult] = results;
+      const [paymentResult, commissionResult, payoutResult] = results;
 
-    setPayments({
-      rows: paymentResult.data || [],
-      error: paymentResult.error?.message || "",
-    });
+      setPayments({
+        rows: paymentResult.data || [],
+        error: paymentResult.error?.message || "",
+      });
 
-    setCommissions({
-      rows: commissionResult.data || [],
-      error: commissionResult.error?.message || "",
-    });
+      setCommissions({
+        rows: commissionResult.data || [],
+        error: commissionResult.error?.message || "",
+      });
 
-    setPayouts({
-      rows: payoutResult.data || [],
-      error: payoutResult.error?.message || "",
-    });
-
-    setLoading(false);
+      setPayouts({
+        rows: payoutResult.data || [],
+        error: payoutResult.error?.message || "",
+      });
+    } catch {
+      setPayments({
+        rows: [],
+        error: "Unable to load financial records.",
+      });
+    } finally {
+      setLoading(false);
+    }
   }
 
   useEffect(() => {
-    loadRecords();
-  }, []);
+    let active = true;
+
+    async function initialize() {
+      const {
+        data: { user },
+        error,
+      } = await supabase.auth.getUser();
+
+      if (!active) return;
+
+      if (error || !user || user.app_metadata?.role !== "admin") {
+        router.replace("/admin/login");
+        return;
+      }
+
+      setAuthorized(true);
+      await loadRecords();
+    }
+
+    initialize();
+
+    return () => {
+      active = false;
+    };
+  }, [router]);
+
+  if (!authorized) {
+    return (
+      <main className="min-h-screen flex items-center justify-center">
+        Checking administrator access...
+      </main>
+    );
+  }
 
   return (
     <main className="min-h-screen bg-gray-50">
       <header className="bg-blue-950 text-white px-6 py-6">
-        <div className="max-w-7xl mx-auto flex justify-between items-center">
+        <div className="max-w-7xl mx-auto flex flex-wrap justify-between items-center gap-4">
           <div>
             <h1 className="text-2xl font-bold">
               Rate-It Financial Management
@@ -149,23 +178,23 @@ export default function PaymentsDashboard() {
             </p>
           </div>
 
-          <a
+          <Link
             href="/admin/login/dashboard"
-            className="bg-white text-blue-950 px-4 py-2 rounded-lg text-sm font-semibold"
+            className="bg-white text-blue-950 px-4 py-2 rounded-lg font-semibold"
           >
             Admin Dashboard
-          </a>
+          </Link>
         </div>
       </header>
 
       <div className="max-w-7xl mx-auto px-5 py-10">
-        <div className="flex justify-between items-center mb-8">
+        <div className="flex justify-between items-center mb-8 gap-4">
           <div>
             <h2 className="text-2xl font-bold">
-              Financial records
+              Financial Records
             </h2>
             <p className="text-gray-500 mt-1">
-              Overview of existing financial database records.
+              Existing financial database records.
             </p>
           </div>
 
@@ -179,38 +208,25 @@ export default function PaymentsDashboard() {
         </div>
 
         {loading ? (
-          <p className="text-gray-500 py-10">
-            Loading financial records...
-          </p>
+          <p className="py-10">Loading financial records...</p>
         ) : (
           <div className="space-y-7">
-            <RecordsSection
-              title="Payment records"
-              data={payments}
-            />
-
-            <RecordsSection
-              title="Commission records"
-              data={commissions}
-            />
-
-            <RecordsSection
-              title="Provider payouts"
-              data={payouts}
-            />
+            <RecordsSection title="Payment Records" data={payments} />
+            <RecordsSection title="Commission Records" data={commissions} />
+            <RecordsSection title="Provider Payouts" data={payouts} />
           </div>
         )}
 
         <section className="bg-white border rounded-xl p-6 mt-8">
           <h2 className="text-xl font-bold mb-3">
-            Rate-It commission policy
+            Rate-It Commission Policy
           </h2>
 
           <ul className="text-gray-600 space-y-2">
             <li>• First 250 hotel signups: no hotel commissions.</li>
             <li>• After 250 hotel signups: planned 10% hotel commission.</li>
-            <li>• Car rentals: planned online payment and commission support.</li>
-            <li>• Airport transfers: planned online payment and commission support.</li>
+            <li>• Car rentals: online payment and commission support.</li>
+            <li>• Airport transfers: online payment and commission support.</li>
             <li>• Hotel guests pay directly at the hotel.</li>
           </ul>
         </section>

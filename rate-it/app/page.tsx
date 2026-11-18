@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 const countries = [
   {
     name: "Uganda",
-    description: "Explore 50 destinations, hotels and unforgettable stays.",
+    description: "Explore destinations, hotels and unforgettable stays.",
     path: "/uganda",
     flag: "🇺🇬",
   },
@@ -26,6 +26,41 @@ const countries = [
     description: "Discover hotels and accommodation across Rwanda.",
     path: "/rwanda",
     flag: "🇷🇼",
+  },
+];
+
+const services = [
+  {
+    title: "Hotels",
+    description:
+      "Discover hotels, compare rooms and prices, and book your next stay.",
+    icon: "🏨",
+    path: "/hotels",
+    action: "Explore hotels",
+  },
+  {
+    title: "Property Rentals",
+    description:
+      "Find holiday homes, apartments, villas and private accommodation.",
+    icon: "🏡",
+    path: "/properties",
+    action: "Explore properties",
+  },
+  {
+    title: "Car Rentals",
+    description:
+      "Find vehicles for business trips, holidays and everyday travel.",
+    icon: "🚗",
+    path: "/cars",
+    action: "Explore cars",
+  },
+  {
+    title: "Airport Transfers",
+    description:
+      "Arrange convenient airport pickups and transfers to your destination.",
+    icon: "✈️",
+    path: "/transfers",
+    action: "Book a transfer",
   },
 ];
 
@@ -83,7 +118,7 @@ export default function HomePage() {
             />
           </button>
 
-          <div
+          <nav
             style={{
               display: "flex",
               alignItems: "center",
@@ -136,7 +171,7 @@ export default function HomePage() {
             >
               Need help?
             </button>
-          </div>
+          </nav>
         </div>
       </header>
 
@@ -144,7 +179,7 @@ export default function HomePage() {
       <section
         style={{
           background: "#f3f7ff",
-          padding: "70px 24px 90px",
+          padding: "70px 24px 85px",
         }}
       >
         <div
@@ -153,16 +188,28 @@ export default function HomePage() {
             margin: "0 auto",
           }}
         >
+          <p
+            style={{
+              color: "#2563eb",
+              fontWeight: "700",
+              letterSpacing: "2px",
+              fontSize: "13px",
+              textTransform: "uppercase",
+            }}
+          >
+            Discover. Compare. Stay.
+          </p>
+
           <h1
             style={{
-              fontSize: "46px",
+              fontSize: "clamp(36px, 5vw, 54px)",
               lineHeight: "1.1",
-              margin: "0 0 14px",
+              margin: "15px 0",
               fontWeight: "800",
               color: "#111827",
             }}
           >
-            Find your next stay
+            Hotels. Homes. Cars. Transfers.
           </h1>
 
           <p
@@ -170,13 +217,14 @@ export default function HomePage() {
               fontSize: "19px",
               color: "#4b5563",
               margin: "0 0 35px",
+              lineHeight: "1.7",
             }}
           >
-            Discover hotels, compare rooms and prices, and book your stay with
-            confidence.
+            Everything you need for your next journey, all in one place.
+            Discover, compare and book across Africa and beyond.
           </p>
 
-          {/* SEARCH BOX */}
+          {/* HOTEL SEARCH */}
           <div
             style={{
               background: "#ffffff",
@@ -186,12 +234,22 @@ export default function HomePage() {
               boxShadow: "0 8px 25px rgba(0,0,0,0.08)",
             }}
           >
+            <h2
+              style={{
+                fontSize: "19px",
+                margin: "0 0 15px",
+                color: "#111827",
+              }}
+            >
+              Find your next hotel
+            </h2>
+
             <div
               style={{
                 display: "grid",
-                gridTemplateColumns: "2fr 1fr 1fr 1fr auto",
+                gridTemplateColumns:
+                  "repeat(auto-fit, minmax(150px, 1fr))",
                 gap: "10px",
-                alignItems: "stretch",
               }}
             >
               <input
@@ -208,6 +266,7 @@ export default function HomePage() {
 
               <input
                 type="date"
+                aria-label="Check-in date"
                 style={{
                   padding: "15px",
                   border: "1px solid #9ca3af",
@@ -219,6 +278,7 @@ export default function HomePage() {
 
               <input
                 type="date"
+                aria-label="Check-out date"
                 style={{
                   padding: "15px",
                   border: "1px solid #9ca3af",
@@ -230,6 +290,7 @@ export default function HomePage() {
 
               <select
                 defaultValue="2"
+                aria-label="Number of guests"
                 style={{
                   padding: "15px",
                   border: "1px solid #9ca3af",
@@ -261,73 +322,201 @@ export default function HomePage() {
                   cursor: "pointer",
                 }}
               >
-                Search
+                Search Hotels
               </button>
             </div>
           </div>
         </div>
       </section>
 
-      {/* WHY RATE-IT */}
+      {/* FOUR MARKETPLACE SERVICES */}
       <section
         style={{
           maxWidth: "1200px",
           margin: "0 auto",
-          padding: "60px 24px",
+          padding: "65px 24px",
         }}
       >
-        <h2
-          style={{
-            fontSize: "30px",
-            margin: "0 0 30px",
-            color: "#111827",
-          }}
-        >
-          Why book with Rate-It?
-        </h2>
+        <div style={{ marginBottom: "35px" }}>
+          <p
+            style={{
+              color: "#2563eb",
+              fontWeight: "700",
+              letterSpacing: "2px",
+              fontSize: "13px",
+              textTransform: "uppercase",
+            }}
+          >
+            Explore Rate-It
+          </p>
+
+          <h2
+            style={{
+              fontSize: "32px",
+              color: "#111827",
+              margin: "10px 0",
+            }}
+          >
+            Everything for your journey
+          </h2>
+
+          <p
+            style={{
+              color: "#6b7280",
+              fontSize: "16px",
+              lineHeight: "1.6",
+            }}
+          >
+            Choose the service you need and explore available options.
+          </p>
+        </div>
 
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-            gap: "20px",
+            gridTemplateColumns:
+              "repeat(auto-fit, minmax(240px, 1fr))",
+            gap: "22px",
           }}
         >
-          {[
-            {
-              title: "Discover",
-              description: "Find hotels and destinations for your next trip.",
-            },
-            {
-              title: "Compare",
-              description: "Compare rooms, prices and hotel information in one place.",
-            },
-            {
-              title: "Stay",
-              description: "Choose your hotel and book your stay with confidence.",
-            },
-          ].map((item) => (
-            <div
-              key={item.title}
+          {services.map((service) => (
+            <button
+              key={service.title}
+              type="button"
+              onClick={() => router.push(service.path)}
               style={{
+                textAlign: "left",
+                padding: "28px",
                 border: "1px solid #e5e7eb",
-                borderRadius: "12px",
-                padding: "25px",
+                borderRadius: "14px",
+                background: "#ffffff",
+                cursor: "pointer",
+                boxShadow: "0 4px 15px rgba(0,0,0,0.05)",
+                transition: "transform 0.2s",
               }}
             >
-              <h3>{item.title}</h3>
-              <p style={{ color: "#6b7280", lineHeight: "1.6" }}>
-                {item.description}
+              <span
+                style={{
+                  fontSize: "42px",
+                  display: "block",
+                  marginBottom: "18px",
+                }}
+              >
+                {service.icon}
+              </span>
+
+              <h3
+                style={{
+                  fontSize: "22px",
+                  color: "#111827",
+                  margin: "0 0 12px",
+                }}
+              >
+                {service.title}
+              </h3>
+
+              <p
+                style={{
+                  color: "#6b7280",
+                  lineHeight: "1.7",
+                  minHeight: "75px",
+                  margin: 0,
+                }}
+              >
+                {service.description}
               </p>
-            </div>
+
+              <span
+                style={{
+                  display: "inline-block",
+                  marginTop: "22px",
+                  color: "#2563eb",
+                  fontWeight: "700",
+                }}
+              >
+                {service.action} →
+              </span>
+            </button>
           ))}
+        </div>
+      </section>
+
+      {/* WHY RATE-IT */}
+      <section
+        style={{
+          background: "#f8fafc",
+          padding: "60px 24px",
+        }}
+      >
+        <div
+          style={{
+            maxWidth: "1200px",
+            margin: "0 auto",
+          }}
+        >
+          <h2
+            style={{
+              fontSize: "30px",
+              margin: "0 0 30px",
+              color: "#111827",
+            }}
+          >
+            Why choose Rate-It?
+          </h2>
+
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns:
+                "repeat(auto-fit, minmax(220px, 1fr))",
+              gap: "20px",
+            }}
+          >
+            {[
+              {
+                title: "Discover",
+                description:
+                  "Explore hotels, properties, vehicles and transfers.",
+              },
+              {
+                title: "Compare",
+                description:
+                  "Compare available options and make informed choices.",
+              },
+              {
+                title: "Book",
+                description:
+                  "Choose the services you need for your journey.",
+              },
+            ].map((item) => (
+              <div
+                key={item.title}
+                style={{
+                  background: "#ffffff",
+                  border: "1px solid #e5e7eb",
+                  borderRadius: "12px",
+                  padding: "25px",
+                }}
+              >
+                <h3>{item.title}</h3>
+                <p
+                  style={{
+                    color: "#6b7280",
+                    lineHeight: "1.7",
+                  }}
+                >
+                  {item.description}
+                </p>
+              </div>
+            ))}
+          </div>
         </div>
       </section>
 
       {/* EXPLORE COUNTRIES */}
       <section
         style={{
-          background: "#f8fafc",
+          background: "#ffffff",
           padding: "65px 24px",
         }}
       >
@@ -361,15 +550,16 @@ export default function HomePage() {
             </h2>
 
             <p style={{ color: "#6b7280", fontSize: "16px" }}>
-              Find hotels, compare accommodation and discover your next
-              destination.
+              Find accommodation and travel services across
+              East Africa and beyond.
             </p>
           </div>
 
           <div
             style={{
               display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(230px, 1fr))",
+              gridTemplateColumns:
+                "repeat(auto-fit, minmax(230px, 1fr))",
               gap: "22px",
             }}
           >
@@ -428,7 +618,7 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* HOTEL OWNER SECTION */}
+      {/* PROVIDER SECTION */}
       <section
         style={{
           background: "#111827",
@@ -454,7 +644,7 @@ export default function HomePage() {
                 fontSize: "30px",
               }}
             >
-              Are you a hotel owner?
+              Become a Rate-It provider
             </h2>
 
             <p
@@ -462,9 +652,10 @@ export default function HomePage() {
                 margin: 0,
                 color: "#d1d5db",
                 fontSize: "17px",
+                lineHeight: "1.7",
               }}
             >
-              Create your hotel account and manage your property on Rate-It.
+              List your hotel and grow your business with Rate-It.
             </p>
           </div>
 
@@ -512,7 +703,7 @@ export default function HomePage() {
               color: "#6b7280",
             }}
           >
-            © 2026 Rate-It
+            © 2026 Rate-It. Discover. Compare. Stay.
           </p>
 
           <button
