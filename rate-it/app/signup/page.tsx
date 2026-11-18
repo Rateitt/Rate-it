@@ -10,308 +10,127 @@ export default function CustomerSignupPage() {
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
 
   async function handleSignup(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
     setLoading(true);
     setError("");
-    setSuccess("");
 
-    if (!fullName.trim()) {
+    const { data, error: signupError } = await supabase.auth.signUp({
+      email: email.trim(),
+      password,
+      options: {
+        data: {
+          full_name: fullName.trim(),
+        },
+      },
+    });
+
+    if (signupError) {
       setLoading(false);
-      setError("Please enter your full name.");
+      setError(signupError.message);
       return;
     }
 
-    if (!email.trim()) {
+    if (!data.user) {
       setLoading(false);
-      setError("Please enter your email address.");
+      setError("Account creation failed. Please try again.");
       return;
     }
 
-    if (password.length < 6) {
+    const { error: customerError } = await supabase
+      .from("customers")
+      .insert({
+        id: data.user.id,
+        full_name: fullName.trim(),
+        email: email.trim(),
+      });
+
+    if (customerError) {
       setLoading(false);
-      setError("Password must be at least 6 characters.");
-      return;
-    }
-
-    if (password !== confirmPassword) {
-      setLoading(false);
-      setError("Passwords do not match.");
-      return;
-    }
-
-    try {
-      const { data, error: signupError } =
-        await supabase.auth.signUp({
-          email: email.trim(),
-          password,
-          options: {
-            data: {
-              full_name: fullName.trim(),
-            },
-          },
-        });
-
-      if (signupError) {
-        setLoading(false);
-        setError(signupError.message);
-        return;
-      }
-
-      if (!data.user) {
-        setLoading(false);
-        setError("Account could not be created. Please try again.");
-        return;
-      }
-
-      const { error: customerError } = await supabase
-        .from("customers")
-        .upsert(
-          {
-            id: data.user.id,
-            full_name: fullName.trim(),
-            email: email.trim(),
-          },
-          {
-            onConflict: "id",
-          }
-        );
-
-      if (customerError) {
-        console.error("CUSTOMER PROFILE ERROR:", customerError);
-        setLoading(false);
-        setError(
-          "Your account was created, but your customer profile could not be saved."
-        );
-        return;
-      }
-
-      setLoading(false);
-
-      if (data.session) {
-        router.push("/dashboard");
-        return;
-      }
-
-      setSuccess(
-        "Account created successfully. Please check your email to confirm your account, then sign in."
+      setError(
+        `Your account was created, but your customer profile could not be saved: ${customerError.message}`
       );
-    } catch (err) {
-      console.error("CUSTOMER SIGNUP ERROR:", err);
-
-      setLoading(false);
-
-      if (err instanceof Error) {
-        setError(`Connection error: ${err.message}`);
-      } else {
-        setError("Unable to create your account. Please try again.");
-      }
+      return;
     }
+
+    setLoading(false);
+    router.push("/dashboard");
   }
 
   return (
     <main
       style={{
         minHeight: "100vh",
-        background: "#f5f7fa",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        padding: "30px 20px",
-        fontFamily: "Arial, sans-serif",
+        background: "#f5f7fa",
+        padding: "20px",
       }}
     >
       <div
         style={{
           width: "100%",
-          maxWidth: "460px",
-          background: "#ffffff",
-          borderRadius: "14px",
+          maxWidth: "450px",
+          background: "white",
           padding: "35px",
-          boxShadow: "0 8px 30px rgba(0, 0, 0, 0.08)",
+          borderRadius: "16px",
+          boxShadow: "0 4px 20px rgba(0,0,0,0.08)",
         }}
       >
-        <button
-          type="button"
-          onClick={() => router.push("/")}
-          style={{
-            border: "none",
-            background: "transparent",
-            padding: 0,
-            fontSize: "28px",
-            fontWeight: "800",
-            color: "#111827",
-            cursor: "pointer",
-            marginBottom: "25px",
-          }}
-        >
-          Rate-It
-        </button>
+        <h1>Create your Rate-It account</h1>
 
-        <h1
-          style={{
-            margin: "0 0 10px",
-            fontSize: "30px",
-            color: "#111827",
-          }}
-        >
-          Create your account
-        </h1>
-
-        <p
-          style={{
-            margin: "0 0 25px",
-            color: "#6b7280",
-            lineHeight: "1.5",
-          }}
-        >
-          Create a Rate-It account to manage your bookings and stays.
+        <p style={{ color: "#666", marginBottom: "25px" }}>
+          Create a customer account to book and manage hotels.
         </p>
 
         <form onSubmit={handleSignup}>
-          <label
-            style={{
-              display: "block",
-              marginBottom: "7px",
-              fontWeight: "600",
-            }}
-          >
-            Full name
-          </label>
+          <label>Full Name</label>
 
           <input
             type="text"
             value={fullName}
-            onChange={(event) => setFullName(event.target.value)}
-            placeholder="Your full name"
-            autoComplete="name"
-            style={{
-              width: "100%",
-              boxSizing: "border-box",
-              padding: "13px",
-              border: "1px solid #d1d5db",
-              borderRadius: "8px",
-              marginBottom: "18px",
-              fontSize: "15px",
-            }}
+            onChange={(e) => setFullName(e.target.value)}
+            required
+            style={inputStyle}
           />
 
-          <label
-            style={{
-              display: "block",
-              marginBottom: "7px",
-              fontWeight: "600",
-            }}
-          >
-            Email address
-          </label>
+          <label>Email</label>
 
           <input
             type="email"
             value={email}
-            onChange={(event) => setEmail(event.target.value)}
-            placeholder="you@example.com"
-            autoComplete="email"
-            style={{
-              width: "100%",
-              boxSizing: "border-box",
-              padding: "13px",
-              border: "1px solid #d1d5db",
-              borderRadius: "8px",
-              marginBottom: "18px",
-              fontSize: "15px",
-            }}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+            style={inputStyle}
           />
 
-          <label
-            style={{
-              display: "block",
-              marginBottom: "7px",
-              fontWeight: "600",
-            }}
-          >
-            Password
-          </label>
+          <label>Password</label>
 
           <input
             type="password"
             value={password}
-            onChange={(event) => setPassword(event.target.value)}
-            placeholder="At least 6 characters"
-            autoComplete="new-password"
-            style={{
-              width: "100%",
-              boxSizing: "border-box",
-              padding: "13px",
-              border: "1px solid #d1d5db",
-              borderRadius: "8px",
-              marginBottom: "18px",
-              fontSize: "15px",
-            }}
-          />
-
-          <label
-            style={{
-              display: "block",
-              marginBottom: "7px",
-              fontWeight: "600",
-            }}
-          >
-            Confirm password
-          </label>
-
-          <input
-            type="password"
-            value={confirmPassword}
-            onChange={(event) => setConfirmPassword(event.target.value)}
-            placeholder="Enter your password again"
-            autoComplete="new-password"
-            style={{
-              width: "100%",
-              boxSizing: "border-box",
-              padding: "13px",
-              border: "1px solid #d1d5db",
-              borderRadius: "8px",
-              marginBottom: "20px",
-              fontSize: "15px",
-            }}
+            onChange={(e) => setPassword(e.target.value)}
+            required
+            minLength={6}
+            style={inputStyle}
           />
 
           {error && (
-            <div
+            <p
               style={{
-                marginBottom: "18px",
+                color: "#b00020",
+                background: "#ffecec",
                 padding: "12px",
                 borderRadius: "8px",
-                background: "#fef2f2",
-                color: "#b91c1c",
-                fontSize: "14px",
               }}
             >
               {error}
-            </div>
-          )}
-
-          {success && (
-            <div
-              style={{
-                marginBottom: "18px",
-                padding: "12px",
-                borderRadius: "8px",
-                background: "#f0fdf4",
-                color: "#166534",
-                fontSize: "14px",
-              }}
-            >
-              {success}
-            </div>
+            </p>
           )}
 
           <button
@@ -319,65 +138,47 @@ export default function CustomerSignupPage() {
             disabled={loading}
             style={{
               width: "100%",
-              padding: "14px",
+              padding: "13px",
+              marginTop: "10px",
+              background: "#111827",
+              color: "white",
               border: "none",
               borderRadius: "8px",
-              background: loading ? "#6b7280" : "#111827",
-              color: "#ffffff",
               fontSize: "16px",
-              fontWeight: "700",
-              cursor: loading ? "not-allowed" : "pointer",
+              fontWeight: 600,
+              cursor: "pointer",
             }}
           >
-            {loading ? "Creating account..." : "Create account"}
+            {loading ? "Creating account..." : "Create Account"}
           </button>
         </form>
 
-        <div
-          style={{
-            marginTop: "25px",
-            textAlign: "center",
-            color: "#6b7280",
-            fontSize: "15px",
-          }}
-        >
+        <p style={{ marginTop: "20px", textAlign: "center" }}>
           Already have an account?{" "}
           <button
             type="button"
             onClick={() => router.push("/login")}
             style={{
               border: "none",
-              background: "transparent",
-              color: "#111827",
-              fontWeight: "700",
+              background: "none",
+              color: "#2563eb",
               cursor: "pointer",
-              padding: 0,
+              fontWeight: 600,
             }}
           >
-            Sign in
+            Log in
           </button>
-        </div>
-
-        <div
-          style={{
-            marginTop: "18px",
-            textAlign: "center",
-          }}
-        >
-          <button
-            type="button"
-            onClick={() => router.push("/")}
-            style={{
-              border: "none",
-              background: "transparent",
-              color: "#6b7280",
-              cursor: "pointer",
-            }}
-          >
-            ← Back to Rate-It
-          </button>
-        </div>
+        </p>
       </div>
     </main>
   );
 }
+
+const inputStyle: React.CSSProperties = {
+  width: "100%",
+  padding: "12px",
+  marginTop: "8px",
+  marginBottom: "18px",
+  border: "1px solid #ccc",
+  borderRadius: "8px",
+};

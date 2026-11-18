@@ -2,7 +2,12 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { supabase } from "../../../../lib/supabase";
+import { createClient } from "@supabase/supabase-js";
+
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!
+);
 
 type Stats = {
   hotels: number;
@@ -10,6 +15,44 @@ type Stats = {
   bookings: number;
   ratings: number;
 };
+
+const managementLinks = [
+  {
+    title: "Hotels",
+    description: "View hotels listed on Rate-It.",
+    href: "/hotels",
+  },
+  {
+    title: "Property Rentals",
+    description: "Manage Airbnb-style property listings.",
+    href: "/properties",
+  },
+  {
+    title: "Car Rentals",
+    description: "View available rental vehicles.",
+    href: "/cars",
+  },
+  {
+    title: "Airport Transfers",
+    description: "Manage airport transfer services.",
+    href: "/transfers",
+  },
+  {
+    title: "Payments & Commissions",
+    description: "Review payments, commissions and provider payouts.",
+    href: "/admin/payments",
+  },
+  {
+    title: "Provider Accounts",
+    description: "Open provider account management.",
+    href: "/providers/dashboard",
+  },
+  {
+    title: "Verification Centre",
+    description: "Approve or reject provider verification applications.",
+    href: "/admin/verification",
+  },
+];
 
 export default function AdminDashboardPage() {
   const router = useRouter();
@@ -27,27 +70,15 @@ export default function AdminDashboardPage() {
     async function loadAdminDashboard() {
       const {
         data: { user },
+        error,
       } = await supabase.auth.getUser();
 
-      if (!user) {
+      if (error || !user) {
         router.replace("/admin/login");
         return;
       }
 
-      /*
-       * Admin access is controlled by Supabase app_metadata.
-       *
-       * Only a user whose app_metadata contains:
-       *
-       * {
-       *   "role": "admin"
-       * }
-       *
-       * will be allowed into this dashboard.
-       */
-      const role = user.app_metadata?.role;
-
-      if (role !== "admin") {
+      if (user.app_metadata?.role !== "admin") {
         await supabase.auth.signOut();
         router.replace("/admin/login");
         return;
@@ -61,10 +92,22 @@ export default function AdminDashboardPage() {
         bookingsResult,
         ratingsResult,
       ] = await Promise.all([
-        supabase.from("hotels").select("*", { count: "exact", head: true }),
-        supabase.from("customers").select("*", { count: "exact", head: true }),
-        supabase.from("bookings").select("*", { count: "exact", head: true }),
-        supabase.from("ratings").select("*", { count: "exact", head: true }),
+        supabase.from("hotels").select("*", {
+          count: "exact",
+          head: true,
+        }),
+        supabase.from("customers").select("*", {
+          count: "exact",
+          head: true,
+        }),
+        supabase.from("bookings").select("*", {
+          count: "exact",
+          head: true,
+        }),
+        supabase.from("ratings").select("*", {
+          count: "exact",
+          head: true,
+        }),
       ]);
 
       setStats({
@@ -87,330 +130,77 @@ export default function AdminDashboardPage() {
 
   if (loading) {
     return (
-      <main
-        style={{
-          minHeight: "100vh",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          background: "#f5f7fa",
-          fontFamily: "Arial, sans-serif",
-        }}
-      >
-        <p>Loading admin dashboard...</p>
+      <main className="min-h-screen flex items-center justify-center bg-gray-100">
+        <p>Loading Rate-It Admin Dashboard...</p>
       </main>
     );
   }
 
-  if (!authorized) {
-    return null;
-  }
+  if (!authorized) return null;
 
   return (
-    <main
-      style={{
-        minHeight: "100vh",
-        background: "#f5f7fa",
-        color: "#111827",
-        fontFamily: "Arial, sans-serif",
-      }}
-    >
-      {/* HEADER */}
-      <header
-        style={{
-          background: "#111827",
-          color: "#ffffff",
-          padding: "18px 30px",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          gap: "20px",
-        }}
-      >
-        <div>
-          <h1
-            style={{
-              margin: 0,
-              fontSize: "24px",
-            }}
-          >
-            Rate-It Admin
-          </h1>
+    <main className="min-h-screen bg-gray-100 text-gray-900">
+      <header className="bg-gray-950 text-white px-6 py-6">
+        <div className="max-w-7xl mx-auto flex flex-wrap justify-between items-center gap-4">
+          <div>
+            <h1 className="text-2xl font-bold">Rate-It Admin</h1>
+            <p className="text-gray-300 mt-1">
+              Platform management dashboard
+            </p>
+          </div>
 
-          <p
-            style={{
-              margin: "5px 0 0",
-              color: "#d1d5db",
-              fontSize: "14px",
-            }}
+          <button
+            onClick={handleLogout}
+            className="border border-gray-500 rounded-lg px-5 py-3"
           >
-            Platform management dashboard
-          </p>
+            Sign out
+          </button>
         </div>
-
-        <button
-          type="button"
-          onClick={handleLogout}
-          style={{
-            padding: "10px 16px",
-            border: "1px solid #6b7280",
-            borderRadius: "8px",
-            background: "transparent",
-            color: "#ffffff",
-            cursor: "pointer",
-            fontWeight: "600",
-          }}
-        >
-          Sign out
-        </button>
       </header>
 
-      {/* MAIN CONTENT */}
-      <section
-        style={{
-          maxWidth: "1200px",
-          margin: "0 auto",
-          padding: "35px 24px",
-        }}
-      >
-        <h2
-          style={{
-            margin: "0 0 8px",
-            fontSize: "30px",
-          }}
-        >
-          Dashboard
-        </h2>
-
-        <p
-          style={{
-            margin: "0 0 30px",
-            color: "#6b7280",
-          }}
-        >
+      <section className="max-w-7xl mx-auto px-5 py-10">
+        <h2 className="text-3xl font-bold">Dashboard</h2>
+        <p className="text-gray-600 mt-2 mb-8">
           Monitor and manage the Rate-It marketplace.
         </p>
 
-        {/* STAT CARDS */}
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(4, 1fr)",
-            gap: "18px",
-            marginBottom: "35px",
-          }}
-        >
-          <div
-            style={{
-              background: "#ffffff",
-              borderRadius: "12px",
-              padding: "25px",
-              border: "1px solid #e5e7eb",
-            }}
-          >
-            <p
-              style={{
-                margin: 0,
-                color: "#6b7280",
-                fontSize: "14px",
-              }}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 mb-12">
+          {[
+            ["Hotels", stats.hotels],
+            ["Customers", stats.customers],
+            ["Bookings", stats.bookings],
+            ["Ratings", stats.ratings],
+          ].map(([label, value]) => (
+            <div
+              key={label}
+              className="bg-white border rounded-xl p-6 shadow-sm"
             >
-              Hotels
-            </p>
-
-            <strong
-              style={{
-                display: "block",
-                marginTop: "8px",
-                fontSize: "32px",
-              }}
-            >
-              {stats.hotels}
-            </strong>
-          </div>
-
-          <div
-            style={{
-              background: "#ffffff",
-              borderRadius: "12px",
-              padding: "25px",
-              border: "1px solid #e5e7eb",
-            }}
-          >
-            <p
-              style={{
-                margin: 0,
-                color: "#6b7280",
-                fontSize: "14px",
-              }}
-            >
-              Customers
-            </p>
-
-            <strong
-              style={{
-                display: "block",
-                marginTop: "8px",
-                fontSize: "32px",
-              }}
-            >
-              {stats.customers}
-            </strong>
-          </div>
-
-          <div
-            style={{
-              background: "#ffffff",
-              borderRadius: "12px",
-              padding: "25px",
-              border: "1px solid #e5e7eb",
-            }}
-          >
-            <p
-              style={{
-                margin: 0,
-                color: "#6b7280",
-                fontSize: "14px",
-              }}
-            >
-              Bookings
-            </p>
-
-            <strong
-              style={{
-                display: "block",
-                marginTop: "8px",
-                fontSize: "32px",
-              }}
-            >
-              {stats.bookings}
-            </strong>
-          </div>
-
-          <div
-            style={{
-              background: "#ffffff",
-              borderRadius: "12px",
-              padding: "25px",
-              border: "1px solid #e5e7eb",
-            }}
-          >
-            <p
-              style={{
-                margin: 0,
-                color: "#6b7280",
-                fontSize: "14px",
-              }}
-            >
-              Ratings
-            </p>
-
-            <strong
-              style={{
-                display: "block",
-                marginTop: "8px",
-                fontSize: "32px",
-              }}
-            >
-              {stats.ratings}
-            </strong>
-          </div>
+              <p className="text-gray-500">{label}</p>
+              <p className="text-3xl font-bold mt-3">{value}</p>
+            </div>
+          ))}
         </div>
 
-        {/* MANAGEMENT */}
-        <h2
-          style={{
-            margin: "0 0 18px",
-            fontSize: "24px",
-          }}
-        >
-          Management
+        <h2 className="text-2xl font-bold mb-5">
+          Marketplace Management
         </h2>
 
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(2, 1fr)",
-            gap: "18px",
-          }}
-        >
-          <button
-            type="button"
-            onClick={() => alert("Hotel management will be connected next.")}
-            style={{
-              textAlign: "left",
-              background: "#ffffff",
-              border: "1px solid #e5e7eb",
-              borderRadius: "12px",
-              padding: "25px",
-              cursor: "pointer",
-            }}
-          >
-            <h3 style={{ margin: "0 0 8px" }}>Hotels</h3>
-            <p style={{ margin: 0, color: "#6b7280" }}>
-              Review and manage hotels on Rate-It.
-            </p>
-          </button>
-
-          <button
-            type="button"
-            onClick={() =>
-              alert("Customer management will be connected next.")
-            }
-            style={{
-              textAlign: "left",
-              background: "#ffffff",
-              border: "1px solid #e5e7eb",
-              borderRadius: "12px",
-              padding: "25px",
-              cursor: "pointer",
-            }}
-          >
-            <h3 style={{ margin: "0 0 8px" }}>Customers</h3>
-            <p style={{ margin: 0, color: "#6b7280" }}>
-              View and manage customer accounts.
-            </p>
-          </button>
-
-          <button
-            type="button"
-            onClick={() =>
-              alert("Booking management will be connected next.")
-            }
-            style={{
-              textAlign: "left",
-              background: "#ffffff",
-              border: "1px solid #e5e7eb",
-              borderRadius: "12px",
-              padding: "25px",
-              cursor: "pointer",
-            }}
-          >
-            <h3 style={{ margin: "0 0 8px" }}>Bookings</h3>
-            <p style={{ margin: 0, color: "#6b7280" }}>
-              Monitor bookings across the platform.
-            </p>
-          </button>
-
-          <button
-            type="button"
-            onClick={() =>
-              alert("Ratings management will be connected next.")
-            }
-            style={{
-              textAlign: "left",
-              background: "#ffffff",
-              border: "1px solid #e5e7eb",
-              borderRadius: "12px",
-              padding: "25px",
-              cursor: "pointer",
-            }}
-          >
-            <h3 style={{ margin: "0 0 8px" }}>Ratings & Reviews</h3>
-            <p style={{ margin: 0, color: "#6b7280" }}>
-              Review ratings and customer feedback.
-            </p>
-          </button>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+          {managementLinks.map((item) => (
+            <a
+              key={item.href}
+              href={item.href}
+              className="block bg-white border rounded-xl p-6 shadow-sm hover:shadow-md transition"
+            >
+              <h3 className="text-lg font-bold">{item.title}</h3>
+              <p className="text-gray-600 mt-2">
+                {item.description}
+              </p>
+              <p className="text-blue-700 font-semibold mt-4">
+                Open management →
+              </p>
+            </a>
+          ))}
         </div>
       </section>
     </main>

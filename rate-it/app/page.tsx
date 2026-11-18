@@ -2,6 +2,33 @@
 
 import { useRouter } from "next/navigation";
 
+const countries = [
+  {
+    name: "Uganda",
+    description: "Explore 50 destinations, hotels and unforgettable stays.",
+    path: "/uganda",
+    flag: "🇺🇬",
+  },
+  {
+    name: "Kenya",
+    description: "Discover hotels and destinations across Kenya.",
+    path: "/kenya",
+    flag: "🇰🇪",
+  },
+  {
+    name: "Tanzania",
+    description: "Explore Tanzania, Zanzibar and beautiful destinations.",
+    path: "/tanzania",
+    flag: "🇹🇿",
+  },
+  {
+    name: "Rwanda",
+    description: "Discover hotels and accommodation across Rwanda.",
+    path: "/rwanda",
+    flag: "🇷🇼",
+  },
+];
+
 export default function HomePage() {
   const router = useRouter();
 
@@ -30,31 +57,38 @@ export default function HomePage() {
             alignItems: "center",
             justifyContent: "space-between",
             gap: "20px",
+            flexWrap: "wrap",
           }}
         >
-          {/* RATE-IT LOGO */}
           <button
             type="button"
             onClick={() => router.push("/")}
             style={{
               border: "none",
               background: "transparent",
-              fontSize: "28px",
-              fontWeight: "800",
-              color: "#111827",
               cursor: "pointer",
               padding: 0,
+              display: "flex",
+              alignItems: "center",
             }}
           >
-            Rate-It
+            <img
+              src="/logo.png"
+              alt="Rate-It"
+              style={{
+                height: "48px",
+                width: "auto",
+                display: "block",
+              }}
+            />
           </button>
 
-          {/* CUSTOMER ACTIONS */}
           <div
             style={{
               display: "flex",
               alignItems: "center",
               gap: "18px",
+              flexWrap: "wrap",
             }}
           >
             <button
@@ -255,47 +289,141 @@ export default function HomePage() {
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: "repeat(3, 1fr)",
+            gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
             gap: "20px",
           }}
         >
-          <div
-            style={{
-              border: "1px solid #e5e7eb",
-              borderRadius: "12px",
-              padding: "25px",
-            }}
-          >
-            <h3>Discover</h3>
-            <p style={{ color: "#6b7280", lineHeight: "1.6" }}>
-              Find hotels and destinations for your next trip.
+          {[
+            {
+              title: "Discover",
+              description: "Find hotels and destinations for your next trip.",
+            },
+            {
+              title: "Compare",
+              description: "Compare rooms, prices and hotel information in one place.",
+            },
+            {
+              title: "Stay",
+              description: "Choose your hotel and book your stay with confidence.",
+            },
+          ].map((item) => (
+            <div
+              key={item.title}
+              style={{
+                border: "1px solid #e5e7eb",
+                borderRadius: "12px",
+                padding: "25px",
+              }}
+            >
+              <h3>{item.title}</h3>
+              <p style={{ color: "#6b7280", lineHeight: "1.6" }}>
+                {item.description}
+              </p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* EXPLORE COUNTRIES */}
+      <section
+        style={{
+          background: "#f8fafc",
+          padding: "65px 24px",
+        }}
+      >
+        <div
+          style={{
+            maxWidth: "1200px",
+            margin: "0 auto",
+          }}
+        >
+          <div style={{ marginBottom: "35px" }}>
+            <p
+              style={{
+                color: "#2563eb",
+                fontWeight: "700",
+                textTransform: "uppercase",
+                letterSpacing: "2px",
+                fontSize: "13px",
+              }}
+            >
+              Explore Africa with Rate-It
+            </p>
+
+            <h2
+              style={{
+                fontSize: "32px",
+                color: "#111827",
+                margin: "10px 0",
+              }}
+            >
+              Discover destinations across Africa
+            </h2>
+
+            <p style={{ color: "#6b7280", fontSize: "16px" }}>
+              Find hotels, compare accommodation and discover your next
+              destination.
             </p>
           </div>
 
           <div
             style={{
-              border: "1px solid #e5e7eb",
-              borderRadius: "12px",
-              padding: "25px",
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(230px, 1fr))",
+              gap: "22px",
             }}
           >
-            <h3>Compare</h3>
-            <p style={{ color: "#6b7280", lineHeight: "1.6" }}>
-              Compare rooms, prices and hotel information in one place.
-            </p>
-          </div>
+            {countries.map((country) => (
+              <button
+                key={country.name}
+                type="button"
+                onClick={() => router.push(country.path)}
+                style={{
+                  textAlign: "left",
+                  padding: "28px",
+                  border: "1px solid #e5e7eb",
+                  borderRadius: "14px",
+                  background: "#ffffff",
+                  cursor: "pointer",
+                  boxShadow: "0 4px 15px rgba(0,0,0,0.04)",
+                }}
+              >
+                <span style={{ fontSize: "38px" }}>
+                  {country.flag}
+                </span>
 
-          <div
-            style={{
-              border: "1px solid #e5e7eb",
-              borderRadius: "12px",
-              padding: "25px",
-            }}
-          >
-            <h3>Stay</h3>
-            <p style={{ color: "#6b7280", lineHeight: "1.6" }}>
-              Choose your hotel and book your stay with confidence.
-            </p>
+                <h3
+                  style={{
+                    fontSize: "23px",
+                    color: "#111827",
+                    margin: "18px 0 10px",
+                  }}
+                >
+                  {country.name}
+                </h3>
+
+                <p
+                  style={{
+                    color: "#6b7280",
+                    lineHeight: "1.6",
+                    minHeight: "50px",
+                  }}
+                >
+                  {country.description}
+                </p>
+
+                <span
+                  style={{
+                    display: "inline-block",
+                    marginTop: "15px",
+                    color: "#2563eb",
+                    fontWeight: "700",
+                  }}
+                >
+                  Explore {country.name} →
+                </span>
+              </button>
+            ))}
           </div>
         </div>
       </section>
