@@ -24,6 +24,12 @@ export default function HotelsPage() {
   const [search, setSearch] = useState("");
 
   useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const destination = params.get("destination") || "";
+    setSearch(destination);
+  }, []);
+
+  useEffect(() => {
     async function loadCatalogData() {
       setLoading(true);
 
@@ -33,24 +39,14 @@ export default function HotelsPage() {
           .select("id, hotel_name, location, description")
           .order("created_at", { ascending: false });
 
-        if (hotelsError) {
-          throw hotelsError;
-        }
+        if (hotelsError) throw hotelsError;
 
         const { data: photosData, error: photosError } = await supabase
           .from("hotel_photos")
           .select("id, hotel_id, image_url");
 
-        if (photosError) {
-          throw photosError;
-        }
+        if (photosError) throw photosError;
 
-        /*
-         * Remove duplicate hotel listings from the customer catalogue.
-         *
-         * The newest record is kept because the query is ordered
-         * by created_at descending.
-         */
         const uniqueHotels: Hotel[] = [];
         const seenHotels = new Set<string>();
 
@@ -78,12 +74,15 @@ export default function HotelsPage() {
     loadCatalogData();
   }, []);
 
+  const searchText = search.trim().toLowerCase();
+
   const filteredHotels = hotels.filter((hotel) => {
-    const searchText = search.toLowerCase().trim();
+    if (!searchText) return true;
 
     return (
       hotel.hotel_name?.toLowerCase().includes(searchText) ||
-      hotel.location?.toLowerCase().includes(searchText)
+      hotel.location?.toLowerCase().includes(searchText) ||
+      hotel.description?.toLowerCase().includes(searchText)
     );
   });
 
@@ -107,7 +106,7 @@ export default function HotelsPage() {
     >
       <header
         style={{
-          background: "#ffffff",
+          background: "#fff",
           borderBottom: "1px solid #e5e5e5",
           padding: "18px 30px",
           display: "flex",
@@ -130,7 +129,7 @@ export default function HotelsPage() {
         </Link>
 
         <Link
-          href="/"
+          href="/login"
           style={{
             textDecoration: "none",
             color: "#333",
@@ -149,21 +148,11 @@ export default function HotelsPage() {
           textAlign: "center",
         }}
       >
-        <h1
-          style={{
-            fontSize: "34px",
-            margin: "0 0 10px",
-          }}
-        >
-          Find your stay
+        <h1 style={{ fontSize: "34px", margin: "0 0 10px" }}>
+          {search ? `Hotels in ${search}` : "Find your stay"}
         </h1>
 
-        <p
-          style={{
-            margin: "0 0 25px",
-            color: "#ccc",
-          }}
-        >
+        <p style={{ margin: "0 0 25px", color: "#ccc" }}>
           Discover and compare hotels on Rate-It
         </p>
 
@@ -180,6 +169,7 @@ export default function HotelsPage() {
             border: "none",
             fontSize: "16px",
             outline: "none",
+            boxSizing: "border-box",
           }}
         />
       </section>
@@ -202,21 +192,11 @@ export default function HotelsPage() {
             flexWrap: "wrap",
           }}
         >
-          <h2
-            style={{
-              margin: 0,
-              fontSize: "24px",
-            }}
-          >
-            Hotels
+          <h2 style={{ margin: 0, fontSize: "24px" }}>
+            {search ? `Available hotels for ${search}` : "Hotels"}
           </h2>
 
-          <span
-            style={{
-              color: "#666",
-              fontSize: "14px",
-            }}
-          >
+          <span style={{ color: "#666", fontSize: "14px" }}>
             {filteredHotels.length} result
             {filteredHotels.length === 1 ? "" : "s"}
           </span>
@@ -244,17 +224,12 @@ export default function HotelsPage() {
             }}
           >
             <h3 style={{ marginBottom: "10px" }}>
-              No hotels found
+              No hotels found {search ? `in ${search}` : ""}
             </h3>
 
-            <p
-              style={{
-                color: "#666",
-                margin: 0,
-              }}
-            >
+            <p style={{ color: "#666", margin: 0 }}>
               {search
-                ? "Try another hotel name or destination."
+                ? `There are currently no hotel listings matching ${search}. Try another destination or check back later.`
                 : "Hotels will appear here when they are available."}
             </p>
           </div>
@@ -305,12 +280,7 @@ export default function HotelsPage() {
                     flex: 1,
                   }}
                 >
-                  <h3
-                    style={{
-                      margin: "0 0 8px",
-                      fontSize: "20px",
-                    }}
-                  >
+                  <h3 style={{ margin: "0 0 8px", fontSize: "20px" }}>
                     {hotel.hotel_name}
                   </h3>
 
@@ -321,8 +291,7 @@ export default function HotelsPage() {
                       fontSize: "14px",
                     }}
                   >
-                    📍{" "}
-                    {hotel.location || "Location not provided"}
+                    📍 {hotel.location || "Location not provided"}
                   </p>
 
                   <p
