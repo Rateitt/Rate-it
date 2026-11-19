@@ -2,235 +2,77 @@
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { createClient } from "@supabase/supabase-js";
+import { supabase } from "@/lib/supabase";
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!
-);
+type Property = {
+  id: string;
+  title?: string;
+  name?: string;
+  property_name?: string;
+  description?: string;
+  location?: string;
+  city?: string;
+  address?: string;
+  country?: string;
+  property_type?: string;
+  price_per_night?: number;
+  nightly_price?: number;
+  price?: number;
+  currency?: string;
+  bedrooms?: number;
+  bathrooms?: number;
+  max_guests?: number;
+  amenities?: string[] | string;
+  status?: string;
+};
 
-type Property = Record<string, any>;
+type PropertyPhoto = {
+  id: string;
+  image_url?: string;
+  photo_url?: string;
+  url?: string;
+};
 
-export default function PropertyBookingPage() {
+export default function PropertyDetailsPage() {
   const params = useParams();
   const router = useRouter();
   const propertyId = String(params.id);
 
   const [property, setProperty] = useState<Property | null>(null);
-  const [checkIn, setCheckIn] = useState("");
-  const [checkOut, setCheckOut] = useState("");
-  const [guests, setGuests] = useState(1);
-  const [specialRequests, setSpecialRequests] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState("");
-  const [totalPrice, setTotalPrice] = useState<number | null>(null);
-  const [currency, setCurrency] = useState("UGX");
-
-  const today = new Date().toLocaleDateString("en-CA");
+  const [photos, setPhotos] = useState<PropertyPhoto[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
   useEffect(() => {
     async function loadProperty() {
-      const { data, error } = await supabase
+      setLoading(true);
+      setError("");
+
+      const { data, error: propertyError } = await supabase
         .from("property")
         .select("*")
         .eq("id", propertyId)
         .maybeSingle();
 
-      if (error || !data) {
-        setMessage("Property could not be found.");
+      if (propertyError || !data) {
+        setError("Property could not be found.");
+        setLoading(false);
         return;
       }
 
       setProperty(data);
 
-      const price =
-        data.price_per_night ??
-        data.nightly_price ??
-        data.price ??
-        data.rent_price ??
-        0;
+      const { data: photoData } = await supabase
+        .from("property_photos")
+        .select("*")
+        .eq("property_id", propertyId);
 
-      setCurrency(data.currency || "UGX");
-
-      if (!Number(price) || Number(price) <= 0) {
-        setMessage("The property price has not been configured yet.");
-      }
+      setPhotos(photoData || []);
+      setLoading(false);
     }
 
     loadProperty();
   }, [propertyId]);
-
-  async function calculatePrice() {
-    setMessage("");
-    setTotalPrice(null);
-
-    if (!checkIn || !checkOut || !property) {
-      setMessage("Please select your check-in and check-out dates.");
-      return;
-    }
-
-    if (checkIn < today || checkOut <= checkIn) {
-      setMessage("Please select valid future dates.");
-      return;
-    }
-
-    const start = new Date(`${checkIn}T00:00:00Z`);
-    const end = new Date(`${checkOut}T00:00:00Z`);
-    const nights = Math.round(
-      (end.getTime() - start.getTime()) / 86400000
-    );
-
-    const basePrice = Number(
-      property.price_per_night ??
-      property.nightly_price ??
-      property.price ??
-      property.rent_price ??
-      0
-    );
-
-    if (!basePrice || basePrice <= 0) {
-      setMessage("This property does not have a valid nightly price.");
-      return;
-    }
-
-    const { data: availability, error } = await supabase
-      .from("property_availability")
-      .select("availability,is_available,price_override")
-      .eq("property_id", propertyId)
-      .gte("availability", checkIn)
-      .lt("availability", checkOut);
-
-    if (error) {
-      setMessage("Could not check availability: " + error.message);
-      return;
-    }
-
-    if (!availability || availability.length !== nights) {
-      setMessage(
-        "Availability has not been confirmed for every night. Please contact the property."
-      );
-      return;
-    }
-
-    if (availability.some((day) => day.is_available !== true)) {
-      setMessage("Sorry, this property is unavailable for some selected dates.");
-      return;
-    }
-
-    const total = availability.reduce((sum, day) => {
-      const override = Number(day.price_override);
-      return sum + (override > 0 ? override : basePrice);
-    }, 0);
-
-    setTotalPrice(total);
-    setMessage("Dates are available. You can continue with your booking.");
-  }
-
-  async function submitBooking() {
-    setMessage("");
-
-    if (!property || !checkIn || !checkOut || totalPrice === null) {
-      setMessage("Please check availability and calculate the price first.");
-      return;
-    }
-
-    setLoading(true);
-
-    try {
-      const {
-        data: { user },
-        error: authError,
-      } = await supabase.auth.getUser();
-
-      if (authError || !user) {
-        setMessage("Please sign in before making a booking.");
-        router.push("/login");
-        return;
-      }
-
-      const start = new Date(`${checkIn}T00:00:00Z`);
-      const end = new Date(`${checkOut}T00:00:00Z`);
-      const nights = Math.round(
-        (end.getTime() - start.getTime()) / 86400000
-      );
-
-      // Check for another booking covering any of the selected dates.
-      const { data: existingBookings, error: bookingCheckError } =
-        await supabase
-          .from("property_bookings")
-          .select("id,status")
-          .eq("property_id", propertyId)
-          .lt("check_in_date", checkOut)
-          .gt("check_out_date", checkIn);
-
-      if (bookingCheckError) {
-        throw bookingCheckError;
-      }
-
-      const blockingStatuses = ["pending", "confirmed"];
-
-      if (
-        existingBookings?.some((booking) =>
-          blockingStatuses.includes(
-            String(booking.status || "").toLowerCase()
-          )
-        )
-      ) {
-        setMessage("These dates have already been booked. Please choose other dates.");
-        return;
-      }
-
-      // Recheck daily availability immediately before saving.
-      const { data: latestAvailability, error: availabilityError } =
-        await supabase
-          .from("property_availability")
-          .select("availability,is_available")
-          .eq("property_id", propertyId)
-          .gte("availability", checkIn)
-          .lt("availability", checkOut);
-
-      if (availabilityError) {
-        throw availabilityError;
-      }
-
-      if (
-        !latestAvailability ||
-        latestAvailability.length !== nights ||
-        latestAvailability.some((day) => day.is_available !== true)
-      ) {
-        setMessage("Availability has changed. Please check your dates again.");
-        setTotalPrice(null);
-        return;
-      }
-
-      const { error: insertError } = await supabase
-        .from("property_bookings")
-        .insert({
-          property_id: propertyId,
-          customer_user_id: user.id,
-          check_in_date: checkIn,
-          check_out_date: checkOut,
-          guests,
-          nights,
-          total_price: totalPrice,
-          currency,
-          status: "pending",
-          payment_status: "pay_at_property",
-          special_requests: specialRequests,
-        });
-
-      if (insertError) {
-        throw insertError;
-      }
-
-      setMessage("Your booking request has been submitted successfully.");
-      setTimeout(() => router.push("/properties"), 1500);
-    } catch (error: any) {
-      setMessage(error.message || "Booking could not be completed.");
-    } finally {
-      setLoading(false);
-    }
-  }
 
   const propertyName =
     property?.name ||
@@ -238,110 +80,167 @@ export default function PropertyBookingPage() {
     property?.property_name ||
     "Property";
 
-  return (
-    <main className="min-h-screen bg-gray-50 px-4 py-10">
-      <div className="mx-auto max-w-2xl rounded-xl bg-white p-6 shadow">
-        <h1 className="mb-2 text-2xl font-bold">
-          Book {propertyName}
+  const location =
+    property?.location ||
+    property?.city ||
+    property?.address ||
+    property?.country ||
+    "Location available on request";
+
+  const price = Number(
+    property?.price_per_night ??
+    property?.nightly_price ??
+    property?.price ??
+    0
+  );
+
+  const currency = property?.currency || "UGX";
+
+  if (loading) {
+    return (
+      <main className="min-h-screen flex items-center justify-center">
+        Loading property details...
+      </main>
+    );
+  }
+
+  if (error || !property) {
+    return (
+      <main className="min-h-screen p-10 text-center">
+        <h1 className="text-2xl font-bold mb-4">
+          Property not found
         </h1>
+        <p className="text-gray-600 mb-5">{error}</p>
+        <button
+          onClick={() => router.push("/properties")}
+          className="bg-blue-700 text-white px-6 py-3 rounded-lg"
+        >
+          Browse properties
+        </button>
+      </main>
+    );
+  }
 
-        <p className="mb-6 text-sm text-gray-600">
-          Choose your dates and confirm your booking details.
-        </p>
+  const amenities = Array.isArray(property.amenities)
+    ? property.amenities
+    : typeof property.amenities === "string"
+      ? property.amenities.split(",").map((item) => item.trim())
+      : [];
 
-        <div className="space-y-4">
-          <div>
-            <label className="mb-1 block font-medium">Check-in date</label>
-            <input
-              type="date"
-              min={today}
-              value={checkIn}
-              onChange={(e) => {
-                setCheckIn(e.target.value);
-                setTotalPrice(null);
-              }}
-              className="w-full rounded-lg border p-3"
-            />
-          </div>
-
-          <div>
-            <label className="mb-1 block font-medium">Check-out date</label>
-            <input
-              type="date"
-              min={checkIn || today}
-              value={checkOut}
-              onChange={(e) => {
-                setCheckOut(e.target.value);
-                setTotalPrice(null);
-              }}
-              className="w-full rounded-lg border p-3"
-            />
-          </div>
-
-          <div>
-            <label className="mb-1 block font-medium">Guests</label>
-            <input
-              type="number"
-              min="1"
-              max="30"
-              value={guests}
-              onChange={(e) =>
-                setGuests(Math.max(1, Number(e.target.value)))
-              }
-              className="w-full rounded-lg border p-3"
-            />
-          </div>
-
-          <div>
-            <label className="mb-1 block font-medium">
-              Special requests
-            </label>
-            <textarea
-              value={specialRequests}
-              onChange={(e) => setSpecialRequests(e.target.value)}
-              placeholder="Any requests for the property?"
-              className="w-full rounded-lg border p-3"
-              rows={3}
-            />
-          </div>
-
-          <button
-            type="button"
-            onClick={calculatePrice}
-            className="w-full rounded-lg bg-gray-800 p-3 font-semibold text-white"
-          >
-            Check availability and price
-          </button>
-
-          {totalPrice !== null && (
-            <div className="rounded-lg bg-gray-100 p-4">
-              <p className="font-semibold">Total for your stay</p>
-              <p className="text-2xl font-bold">
-                {currency} {totalPrice.toLocaleString()}
-              </p>
-            </div>
-          )}
-
-          {message && (
-            <p className="rounded-lg bg-gray-100 p-3 text-sm">
-              {message}
-            </p>
-          )}
-
-          <button
-            type="button"
-            onClick={submitBooking}
-            disabled={loading || totalPrice === null}
-            className="w-full rounded-lg bg-blue-700 p-3 font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {loading ? "Submitting..." : "Confirm booking request"}
-          </button>
-
-          <p className="text-center text-sm text-gray-500">
-            Payment is made directly at the property.
-          </p>
+  return (
+    <main className="min-h-screen bg-gray-50">
+      <header className="bg-white border-b px-5 py-5">
+        <div className="max-w-6xl mx-auto flex justify-between">
+          <a href="/" className="text-2xl font-bold text-blue-700">
+            Rate-It
+          </a>
+          <a href="/properties" className="font-medium text-blue-700">
+            All properties
+          </a>
         </div>
-      </div>
+      </header>
+
+      <section className="max-w-6xl mx-auto px-5 py-10">
+        <h1 className="text-3xl font-bold mb-3">{propertyName}</h1>
+        <p className="text-gray-600 mb-7">{location}</p>
+
+        {photos.length > 0 ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+            {photos.map((photo, index) => {
+              const image =
+                photo.image_url || photo.photo_url || photo.url;
+
+              return image ? (
+                <img
+                  key={photo.id || index}
+                  src={image}
+                  alt={`${propertyName} photo ${index + 1}`}
+                  className="w-full h-72 object-cover rounded-xl"
+                />
+              ) : null;
+            })}
+          </div>
+        ) : (
+          <div className="h-64 bg-gray-200 rounded-xl flex items-center justify-center text-gray-500 mb-8">
+            Property photos coming soon
+          </div>
+        )}
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="md:col-span-2 bg-white rounded-xl p-6 shadow-sm">
+            <h2 className="text-xl font-bold mb-4">
+              About this property
+            </h2>
+
+            <p className="text-gray-700 whitespace-pre-line">
+              {property.description || "Discover this property on Rate-It."}
+            </p>
+
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-5 mt-7">
+              <div>
+                <p className="text-gray-500 text-sm">Property type</p>
+                <p className="font-semibold">
+                  {property.property_type || "Not specified"}
+                </p>
+              </div>
+              <div>
+                <p className="text-gray-500 text-sm">Bedrooms</p>
+                <p className="font-semibold">
+                  {property.bedrooms ?? "Not specified"}
+                </p>
+              </div>
+              <div>
+                <p className="text-gray-500 text-sm">Bathrooms</p>
+                <p className="font-semibold">
+                  {property.bathrooms ?? "Not specified"}
+                </p>
+              </div>
+              <div>
+                <p className="text-gray-500 text-sm">Maximum guests</p>
+                <p className="font-semibold">
+                  {property.max_guests ?? "Not specified"}
+                </p>
+              </div>
+            </div>
+
+            {amenities.length > 0 && (
+              <div className="mt-8">
+                <h2 className="text-xl font-bold mb-3">Amenities</h2>
+                <ul className="list-disc pl-6 grid grid-cols-2 gap-2">
+                  {amenities.map((amenity, index) => (
+                    <li key={index}>{amenity}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+
+          <aside className="bg-white rounded-xl p-6 shadow-sm h-fit">
+            <p className="text-gray-500 text-sm mb-2">
+              Price per night
+            </p>
+
+            <p className="text-2xl font-bold text-blue-800 mb-6">
+              {price > 0
+                ? `${currency} ${price.toLocaleString()}`
+                : "Contact for price"}
+            </p>
+
+            <button
+              onClick={() =>
+                router.push(`/properties/${encodeURIComponent(propertyId)}/book`)
+              }
+              className="w-full bg-blue-700 hover:bg-blue-800 text-white font-semibold py-3 rounded-lg"
+            >
+              Book this property
+            </button>
+
+            <p className="text-xs text-gray-500 text-center mt-4">
+              Payment is made directly at the property.
+            </p>
+          </aside>
+        </div>
+      </section>
     </main>
   );
 }
