@@ -22,10 +22,10 @@ const BOOKING_TABLES: Record<string, string[]> = {
 };
 
 function getBaseUrl() {
-  const url = process.env.NEXT_PUBLIC_SITE_URL;
+  const url = process.env.SITE_URL;
 
   if (!url) {
-    throw new Error("NEXT_PUBLIC_SITE_URL is missing.");
+    throw new Error("SITE_URL is missing.");
   }
 
   return url.replace(/\/$/, "");
