@@ -166,11 +166,13 @@ export default function ProviderDashboard() {
 
       setCommissions(commissionData || []);
 
-      const { data: payoutData } = await supabase
+      const { data: payoutData, error: payoutError } = await supabase
         .from("provider_payouts")
         .select("*")
         .eq("provider_id", profile.id)
         .order("requested_at", { ascending: false });
+
+      if (payoutError) throw payoutError;
 
       setPayouts(payoutData || []);
 
@@ -192,6 +194,10 @@ export default function ProviderDashboard() {
     }
   }
 
+  useEffect(() => {
+    loadDashboard();
+  }, []);
+
   async function saveListing(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
@@ -201,7 +207,7 @@ export default function ProviderDashboard() {
     setMessage("");
 
     try {
-      let table = listingTable(provider.provider_type);
+      const table = listingTable(provider.provider_type);
       let payload: Record<string, any>;
 
       if (provider.provider_type === "property_rental") {
@@ -323,6 +329,18 @@ export default function ProviderDashboard() {
   function money(value: any, currency = "UGX") {
     const amount = Number(value || 0);
     return `${currency} ${amount.toLocaleString()}`;
+  }
+
+  function formatDate(value: any) {
+    if (!value) return "Not available";
+
+    const date = new Date(value);
+
+    if (Number.isNaN(date.getTime())) {
+      return "Not available";
+    }
+
+    return date.toLocaleString();
   }
 
   function displayName(item: Item) {
@@ -597,16 +615,53 @@ export default function ProviderDashboard() {
 
       {activeTab === "payouts" && (
         <section className="space-y-3">
-          <h2 className="text-xl font-bold">Provider Payouts</h2>
+          <h2 className="text-xl font-bold">Provider Payout History</h2>
+
           {payouts.length === 0 ? (
             <p>No payout records found.</p>
           ) : (
             payouts.map((item) => (
-              <div key={item.id} className="rounded-xl border p-4">
-                <p><strong>Amount:</strong> {money(item.amount, item.currency)}</p>
-                <p><strong>Method:</strong> {item.payout_method || "Not specified"}</p>
-                <p><strong>Status:</strong> {item.status || "Not specified"}</p>
-                <p><strong>Reference:</strong> {item.payout_reference || "—"}</p>
+              <div key={item.id} className="space-y-3 rounded-xl border p-4">
+                <p>
+                  <strong>Amount:</strong>{" "}
+                  {money(item.amount, item.currency)}
+                </p>
+
+                <p>
+                  <strong>Payment method:</strong>{" "}
+                  {item.payout_method || "Not specified"}
+                </p>
+
+                <p>
+                  <strong>Status:</strong>{" "}
+                  <span className="capitalize">
+                    {item.status || "Not specified"}
+                  </span>
+                </p>
+
+                <p>
+                  <strong>Payout reference:</strong>{" "}
+                  {item.payout_reference || "Not yet provided"}
+                </p>
+
+                <p>
+                  <strong>Date requested:</strong>{" "}
+                  {formatDate(item.requested_at)}
+                </p>
+
+                <p>
+                  <strong>Date paid:</strong>{" "}
+                  {item.paid_at
+                    ? formatDate(item.paid_at)
+                    : "Not yet paid"}
+                </p>
+
+                <div>
+                  <strong>Admin notes:</strong>
+                  <p className="mt-1 whitespace-pre-wrap text-gray-600">
+                    {item.notes || "No additional notes."}
+                  </p>
+                </div>
               </div>
             ))
           )}
