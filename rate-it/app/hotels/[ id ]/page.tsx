@@ -9,6 +9,7 @@ type Hotel = {
   hotel_name: string;
   location: string | null;
   description: string | null;
+  verification_status?: string | null;
 };
 
 type HotelPhoto = {
@@ -38,8 +39,7 @@ export default function HotelDetailsPage() {
   useEffect(() => {
     async function loadHotel() {
       try {
-        const pathname = window.location.pathname;
-        const parts = pathname.split("/").filter(Boolean);
+        const parts = window.location.pathname.split("/").filter(Boolean);
         const hotelIdFromUrl = parts[parts.length - 1];
 
         if (!hotelIdFromUrl) {
@@ -51,103 +51,61 @@ export default function HotelDetailsPage() {
 
         const numericHotelId = Number(hotelIdFromUrl);
 
-        if (Number.isNaN(numericHotelId)) {
+        if (!Number.isFinite(numericHotelId)) {
           setErrorMessage(`Invalid hotel ID: ${hotelIdFromUrl}`);
           setLoading(false);
           setRoomsLoading(false);
           return;
         }
 
-        console.log("Loading hotel ID:", numericHotelId);
-
-        /*
-         * LOAD HOTEL
-         */
-        const { data: hotelData, error: hotelError } =
-          await supabase
-            .from("hotels")
-            .select(
-              "id, hotel_name, location, description"
-            )
-            .eq("id", numericHotelId)
-            .maybeSingle();
+        const { data: hotelData, error: hotelError } = await supabase
+          .from("hotels")
+          .select(
+            "id, hotel_name, location, description, verification_status"
+          )
+          .eq("id", numericHotelId)
+          .maybeSingle();
 
         if (hotelError) {
-          console.error("Hotel error:", hotelError);
-
-          setErrorMessage(
-            `Hotel error: ${hotelError.message}`
-          );
-
+          setErrorMessage(`Hotel error: ${hotelError.message}`);
           setLoading(false);
           setRoomsLoading(false);
           return;
         }
 
         if (!hotelData) {
-          setErrorMessage(
-            `No hotel was found with ID ${numericHotelId}.`
-          );
-
+          setErrorMessage(`No hotel was found with ID ${numericHotelId}.`);
           setLoading(false);
           setRoomsLoading(false);
           return;
         }
 
-        setHotel(hotelData);
+        setHotel(hotelData as Hotel);
 
-        /*
-         * LOAD HOTEL PHOTOS
-         */
-        const {
-          data: photoData,
-          error: photoError,
-        } = await supabase
+        const { data: photoData, error: photoError } = await supabase
           .from("hotel_photos")
           .select("id, image_url")
           .eq("hotel_id", numericHotelId)
-          .order("created_at", {
-            ascending: false,
-          });
+          .order("created_at", { ascending: false });
 
-        if (photoError) {
-          console.error("Photo error:", photoError);
-        } else {
+        if (!photoError) {
           setPhotos(photoData || []);
+        } else {
+          console.error("Photo error:", photoError);
         }
 
-        /*
-         * LOAD ROOMS
-         */
-        setRoomsLoading(true);
-        setRoomErrorMessage("");
-
-        console.log(
-          "Loading rooms for hotel ID:",
-          numericHotelId
-        );
-
-        const {
-          data: roomData,
-          error: roomError,
-        } = await supabase
+        const { data: roomData, error: roomError } = await supabase
           .from("rooms")
           .select(
             "id, hotel_id, room_name, description, price, available_rooms, created_at"
           )
           .eq("hotel_id", numericHotelId)
-          .order("created_at", {
-            ascending: false,
-          });
-
-        console.log("Room data:", roomData);
-        console.log("Room error:", roomError);
+          .order("created_at", { ascending: false });
 
         if (roomError) {
           setRoomErrorMessage(
             `Room loading error: ${roomError.message}`
           );
-
           setRooms([]);
         } else {
           setRooms(roomData || []);
@@ -157,11 +115,9 @@ export default function HotelDetailsPage() {
         setLoading(false);
       } catch (error) {
         console.error("Unexpected error:", error);
-
         setErrorMessage(
           "Something went wrong while loading the hotel."
         );
-
         setLoading(false);
         setRoomsLoading(false);
       }
@@ -172,31 +128,11 @@ export default function HotelDetailsPage() {
 
   if (loading) {
     return (
-      <main
-        style={{
-          minHeight: "100vh",
-          background: "#f7f7f7",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          fontFamily: "Arial, sans-serif",
-          padding: "20px",
-        }}
-      >
-        <div
-          style={{
-            background: "#ffffff",
-            padding: "40px",
-            borderRadius: "12px",
-            textAlign: "center",
-            border: "1px solid #e5e5e5",
-          }}
-        >
-          <h2>Loading hotel...</h2>
-
-          <p style={{ color: "#666666" }}>
-            Please wait while we load the hotel
-            information.
+      <main className="flex min-h-screen items-center justify-center bg-gray-50 p-5">
+        <div className="rounded-xl border bg-white p-10 text-center">
+          <h2 className="text-xl font-bold">Loading hotel...</h2>
+          <p className="mt-2 text-gray-600">
+            Please wait while we load the hotel information.
           </p>
         </div>
       </main>
@@ -205,47 +141,15 @@ export default function HotelDetailsPage() {
 
   if (!hotel) {
     return (
-      <main
-        style={{
-          minHeight: "100vh",
-          background: "#f7f7f7",
-          padding: "40px 20px",
-          fontFamily: "Arial, sans-serif",
-        }}
-      >
-        <div
-          style={{
-            maxWidth: "700px",
-            margin: "0 auto",
-            background: "#ffffff",
-            padding: "40px",
-            borderRadius: "12px",
-            textAlign: "center",
-            border: "1px solid #e5e5e5",
-          }}
-        >
-          <h1>Hotel could not be loaded</h1>
-
-          <p
-            style={{
-              color: "#b00020",
-              lineHeight: "1.6",
-            }}
-          >
-            {errorMessage}
-          </p>
-
+      <main className="min-h-screen bg-gray-50 p-5 sm:p-10">
+        <div className="mx-auto max-w-2xl rounded-xl border bg-white p-10 text-center">
+          <h1 className="text-2xl font-bold">
+            Hotel could not be loaded
+          </h1>
+          <p className="mt-4 text-red-700">{errorMessage}</p>
           <Link
             href="/hotels"
-            style={{
-              display: "inline-block",
-              marginTop: "20px",
-              background: "#000000",
-              color: "#ffffff",
-              padding: "12px 20px",
-              borderRadius: "8px",
-              textDecoration: "none",
-            }}
+            className="mt-6 inline-block rounded-lg bg-black px-5 py-3 text-white"
           >
             Back to Hotels
           </Link>
@@ -254,85 +158,36 @@ export default function HotelDetailsPage() {
     );
   }
 
+  const isVerified =
+    hotel.verification_status?.toLowerCase() === "approved";
+
   return (
-    <main
-      style={{
-        minHeight: "100vh",
-        background: "#f7f7f7",
-        fontFamily: "Arial, sans-serif",
-      }}
-    >
-      <header
-        style={{
-          background: "#ffffff",
-          borderBottom: "1px solid #e5e5e5",
-          padding: "18px 30px",
-        }}
-      >
-        <div
-          style={{
-            maxWidth: "1100px",
-            margin: "0 auto",
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            gap: "20px",
-            flexWrap: "wrap",
-          }}
-        >
+    <main className="min-h-screen bg-gray-50 font-sans">
+      <header className="border-b bg-white px-5 py-5">
+        <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-4">
           <Link
             href="/hotels"
-            style={{
-              color: "#000000",
-              textDecoration: "none",
-              fontSize: "26px",
-              fontWeight: "bold",
-            }}
+            className="text-2xl font-bold text-black"
           >
             Rate-It
           </Link>
 
-          <Link
-            href="/hotels"
-            style={{
-              color: "#333333",
-              textDecoration: "none",
-            }}
-          >
+          <Link href="/hotels" className="text-gray-700 hover:underline">
             ← Back to Hotels
           </Link>
         </div>
       </header>
 
-      <section
-        style={{
-          maxWidth: "1100px",
-          margin: "0 auto",
-          padding: "40px 20px",
-        }}
-      >
-        {/* HOTEL INFORMATION */}
-
-        <div
-          style={{
-            background: "#ffffff",
-            borderRadius: "14px",
-            overflow: "hidden",
-            border: "1px solid #e5e5e5",
-          }}
-        >
-          {/* HOTEL PHOTOS */}
-
+      <section className="mx-auto max-w-6xl px-5 py-10">
+        <div className="overflow-hidden rounded-xl border bg-white shadow-sm">
           {photos.length > 0 ? (
             <div
+              className="grid gap-1 bg-gray-100"
               style={{
-                display: "grid",
                 gridTemplateColumns:
                   photos.length === 1
                     ? "1fr"
                     : "repeat(auto-fit, minmax(250px, 1fr))",
-                gap: "4px",
-                background: "#eeeeee",
               }}
             >
               {photos.map((photo) => (
@@ -340,258 +195,132 @@ export default function HotelDetailsPage() {
                   key={photo.id}
                   src={photo.image_url}
                   alt={hotel.hotel_name}
-                  style={{
-                    width: "100%",
-                    height: "280px",
-                    objectFit: "cover",
-                    display: "block",
-                  }}
+                  className="block h-72 w-full object-cover"
                 />
               ))}
             </div>
           ) : (
-            <div
-              style={{
-                height: "300px",
-                background: "#e9e9e9",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                color: "#777777",
-                fontSize: "18px",
-              }}
-            >
+            <div className="flex h-72 items-center justify-center bg-gray-100 text-lg text-gray-500">
               Hotel photo
             </div>
           )}
 
-          <div
-            style={{
-              padding: "35px",
-            }}
-          >
-            <h1
-              style={{
-                margin: "0 0 12px",
-                fontSize: "34px",
-              }}
-            >
-              {hotel.hotel_name}
-            </h1>
+          <div className="p-6 sm:p-9">
+            <div className="flex flex-wrap items-center gap-3">
+              <h1 className="text-3xl font-bold">
+                {hotel.hotel_name}
+              </h1>
 
-            <p
-              style={{
-                color: "#666666",
-                fontSize: "16px",
-                marginBottom: "25px",
-              }}
-            >
-              📍{" "}
-              {hotel.location ||
-                "Location not provided"}
+              {isVerified && (
+                <span
+                  title="This hotel has been verified by Rate-It"
+                  className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-3 py-1 text-sm font-semibold text-blue-700"
+                >
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    viewBox="0 0 24 24"
+                    fill="currentColor"
+                    className="h-5 w-5"
+                    aria-hidden="true"
+                  >
+                    <path
+                      fillRule="evenodd"
+                      d="M2.25 12c0-1.43.93-2.63 2.22-3.04a3.25 3.25 0 0 1 4.49-4.49A3.25 3.25 0 0 1 12 2.25c1.43 0 2.63.93 3.04 2.22a3.25 3.25 0 0 1 4.49 4.49A3.25 3.25 0 0 1 21.75 12c0 1.43-.93 2.63-2.22 3.04a3.25 3.25 0 0 1-4.49 4.49A3.25 3.25 0 0 1 12 21.75c-1.43 0-2.63-.93-3.04-2.22a3.25 3.25 0 0 1-4.49-4.49A3.25 3.25 0 0 1 2.25 12Zm13.28-1.78a.75.75 0 0 0-1.06-1.06l-3.72 3.72-1.22-1.22a.75.75 0 0 0-1.06 1.06l1.75 1.75a.75.75 0 0 0 1.06 0l4.25-4.25Z"
+                      clipRule="evenodd"
+                    />
+                  </svg>
+                  Verified
+                </span>
+              )}
+            </div>
+
+            <p className="mt-3 text-gray-600">
+              📍 {hotel.location || "Location not provided"}
             </p>
 
-            <hr
-              style={{
-                border: 0,
-                borderTop: "1px solid #eeeeee",
-                margin: "25px 0",
-              }}
-            />
+            <hr className="my-7 border-gray-200" />
 
-            <h2>About this hotel</h2>
-
-            <p
-              style={{
-                color: "#555555",
-                lineHeight: "1.7",
-                fontSize: "16px",
-              }}
-            >
-              {hotel.description ||
-                "Discover this hotel on Rate-It."}
+            <h2 className="text-xl font-bold">About this hotel</h2>
+            <p className="mt-3 whitespace-pre-wrap leading-7 text-gray-600">
+              {hotel.description || "Discover this hotel on Rate-It."}
             </p>
           </div>
         </div>
 
-        {/* ROOMS */}
-
-        <section
-          style={{
-            marginTop: "35px",
-          }}
-        >
-          <h2
-            style={{
-              fontSize: "28px",
-              marginBottom: "20px",
-            }}
-          >
+        <section className="mt-9">
+          <h2 className="mb-5 text-2xl font-bold">
             Available rooms
           </h2>
 
           {roomsLoading ? (
-            <div
-              style={{
-                background: "#ffffff",
-                padding: "30px",
-                borderRadius: "12px",
-                border: "1px solid #e5e5e5",
-              }}
-            >
-              <p
-                style={{
-                  margin: 0,
-                  color: "#666666",
-                }}
-              >
-                Loading available rooms...
-              </p>
+            <div className="rounded-xl border bg-white p-8 text-gray-600">
+              Loading available rooms...
             </div>
           ) : roomErrorMessage ? (
-            <div
-              style={{
-                background: "#fff5f5",
-                padding: "30px",
-                borderRadius: "12px",
-                border: "1px solid #f0caca",
-              }}
-            >
-              <h3
-                style={{
-                  marginTop: 0,
-                  color: "#b00020",
-                }}
-              >
-                Could not load rooms
-              </h3>
-
-              <p
-                style={{
-                  marginBottom: 0,
-                  color: "#7a0000",
-                  lineHeight: "1.6",
-                }}
-              >
-                {roomErrorMessage}
-              </p>
+            <div className="rounded-xl border border-red-200 bg-red-50 p-8 text-red-700">
+              <h3 className="font-bold">Could not load rooms</h3>
+              <p className="mt-2">{roomErrorMessage}</p>
             </div>
           ) : rooms.length === 0 ? (
-            <div
-              style={{
-                background: "#ffffff",
-                padding: "30px",
-                borderRadius: "12px",
-                border: "1px solid #e5e5e5",
-              }}
-            >
-              <p
-                style={{
-                  margin: 0,
-                  color: "#666666",
-                }}
-              >
-                No rooms are currently listed
-                for this hotel.
-              </p>
+            <div className="rounded-xl border bg-white p-8 text-gray-600">
+              No rooms are currently listed for this hotel.
             </div>
           ) : (
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns:
-                  "repeat(auto-fit, minmax(280px, 1fr))",
-                gap: "20px",
-              }}
-            >
-              {rooms.map((room) => (
-                <div
-                  key={room.id}
-                  style={{
-                    background: "#ffffff",
-                    padding: "24px",
-                    borderRadius: "12px",
-                    border: "1px solid #e5e5e5",
-                  }}
-                >
-                  <h3
-                    style={{
-                      margin: "0 0 10px",
-                      fontSize: "21px",
-                    }}
-                  >
-                    {room.room_name || "Room"}
-                  </h3>
+            <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+              {rooms.map((room) => {
+                const unavailable =
+                  room.available_rooms !== null &&
+                  room.available_rooms <= 0;
 
-                  {room.description && (
-                    <p
-                      style={{
-                        color: "#666666",
-                        lineHeight: "1.5",
-                      }}
-                    >
-                      {room.description}
+                return (
+                  <article
+                    key={room.id}
+                    className="rounded-xl border bg-white p-6 shadow-sm"
+                  >
+                    <h3 className="text-xl font-bold">
+                      {room.room_name || "Room"}
+                    </h3>
+
+                    {room.description && (
+                      <p className="mt-3 leading-6 text-gray-600">
+                        {room.description}
+                      </p>
+                    )}
+
+                    <p className="mt-5 text-xl font-bold">
+                      {room.price !== null
+                        ? `${Number(room.price).toLocaleString()} per night`
+                        : "Price not provided"}
                     </p>
-                  )}
 
-                  <p
-                    style={{
-                      fontSize: "22px",
-                      fontWeight: "bold",
-                      marginTop: "20px",
-                      marginBottom: "8px",
-                    }}
-                  >
-                    {room.price !== null
-                      ? `${Number(
-                          room.price
-                        ).toLocaleString()} per night`
-                      : "Price not provided"}
-                  </p>
+                    <p
+                      className={`mt-2 font-semibold ${
+                        unavailable ? "text-red-700" : "text-green-700"
+                      }`}
+                    >
+                      {room.available_rooms !== null
+                        ? unavailable
+                          ? "No rooms available"
+                          : `${room.available_rooms} room${
+                              room.available_rooms === 1 ? "" : "s"
+                            } available`
+                        : "Availability not provided"}
+                    </p>
 
-                  <p
-                    style={{
-                      color:
-                        room.available_rooms !== null &&
-                        room.available_rooms > 0
-                          ? "#176b35"
-                          : "#b00020",
-                      fontWeight: "600",
-                    }}
-                  >
-                    {room.available_rooms !== null
-                      ? room.available_rooms > 0
-                        ? `${room.available_rooms} room${
-                            room.available_rooms === 1
-                              ? ""
-                              : "s"
-                          } available`
-                        : "No rooms available"
-                      : "Availability not provided"}
-                  </p>
-
-                  <Link
-                    href={`/hotels/${hotel.id}/book?room=${room.id}`}
-                    style={{
-                      display: "block",
-                      textAlign: "center",
-                      background:
-                        room.available_rooms !== null &&
-                        room.available_rooms <= 0
-                          ? "#999999"
-                          : "#000000",
-                      color: "#ffffff",
-                      textDecoration: "none",
-                      padding: "13px",
-                      borderRadius: "8px",
-                      marginTop: "18px",
-                      fontWeight: "bold",
-                    }}
-                  >
-                    Book Now
-                  </Link>
-                </div>
-              ))}
+                    <Link
+                      href={`/hotels/${hotel.id}/book?room=${room.id}`}
+                      aria-disabled={unavailable}
+                      className={`mt-5 block rounded-lg px-4 py-3 text-center font-bold text-white ${
+                        unavailable
+                          ? "pointer-events-none bg-gray-400"
+                          : "bg-black hover:bg-gray-800"
+                      }`}
+                    >
+                      Book Now
+                    </Link>
+                  </article>
+                );
+              })}
             </div>
           )}
         </section>
