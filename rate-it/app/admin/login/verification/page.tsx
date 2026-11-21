@@ -5,27 +5,25 @@ import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 
 type Verification = {
-  id: string | number;
-  provider_id?: string;
-  hotel_name?: string;
+  id: string;
+  provider_id: string;
+  status: string;
+  reviewer_notes?: string | null;
+  reviewed_at?: string | null;
+  created_at?: string | null;
   business_name?: string;
-  name?: string;
   provider_type?: string;
-  verification_status?: string;
-  status?: string;
-  verification_notes?: string;
-  verified_at?: string;
-  created_at?: string;
+  user_id?: string;
 };
 
-function formatDate(value?: string) {
+function formatDate(value?: string | null) {
   if (!value) return "Not specified";
 
   const date = new Date(value);
 
-  if (Number.isNaN(date.getTime())) return "Not specified";
-
-  return date.toLocaleString();
+  return Number.isNaN(date.getTime())
+    ? "Not specified"
+    : date.toLocaleString();
 }
 
 export default function VerificationDashboard() {
@@ -35,7 +33,7 @@ export default function VerificationDashboard() {
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState("");
   const [filter, setFilter] = useState("All");
-  const [saving, setSaving] = useState<string | number | null>(null);
+  const [saving, setSaving] = useState<string | null>(null);
 
   const loadRecords = useCallback(async () => {
     setLoading(true);
@@ -48,12 +46,58 @@ export default function VerificationDashboard() {
       .limit(200);
 
     if (error) {
-      setMessage("Unable to load verification records: " + error.message);
+      setMessage("Unable to load applications: " + error.message);
       setRecords([]);
-    } else {
-      setRecords((data || []) as Verification[]);
+      setLoading(false);
+      return;
     }
 
+    const verificationRecords = (data || []) as Verification[];
+    const providerIds = [
+      ...new Set(
+        verificationRecords
+          .map((record) => record.provider_id)
+          .filter(Boolean)
+      ),
+    ];
+
+    let providers: {
+      id: string;
+      user_id: string;
+      business_name: string;
+      provider_type: string;
+    }[] = [];
+
+    if (providerIds.length > 0) {
+      const { data: providerData, error: providerError } = await supabase
+        .from("providers")
+        .select("id, user_id, business_name, provider_type")
+        .in("id", providerIds);
+
+      if (providerError) {
+        setMessage(
+          "Applications loaded, but provider details could not be loaded: " +
+            providerError.message
+        );
+      } else {
+        providers = providerData || [];
+      }
+    }
+
+    const combined = verificationRecords.map((record) => {
+      const provider = providers.find(
+        (item) => item.id === record.provider_id
+      );
+
+      return {
+        ...record,
+        user_id: provider?.user_id,
+        business_name: provider?.business_name,
+        provider_type: provider?.provider_type,
+      };
+    });
+
+    setRecords(combined);
     setLoading(false);
   }, []);
 
@@ -89,7 +133,7 @@ export default function VerificationDashboard() {
   ) {
     const notes = window.prompt(
       `Enter verification notes for ${status.toLowerCase()}:`,
-      record.verification_notes || ""
+      record.reviewer_notes || ""
     );
 
     if (notes === null) return;
@@ -99,14 +143,13 @@ export default function VerificationDashboard() {
       return;
     }
 
-    const currentStatus = (
-      record.verification_status ||
-      record.status ||
-      "Pending"
-    ).toLowerCase();
-
-    if (currentStatus !== "pending") {
+    if ((record.status || "Pending").toLowerCase() !== "pending") {
       setMessage("Only pending applications can be updated.");
+      return;
+    }
+
+    if (!record.provider_id) {
+      setMessage("This application has no provider ID.");
       return;
     }
 
@@ -121,55 +164,115 @@ export default function VerificationDashboard() {
     setSaving(record.id);
     setMessage("");
 
+    // Find the provider and the hotel connected to that provider.
+    const { data: provider, error: providerError } = await supabase
+      .from("providers")
+      .select("user_id")
+      .eq("id", record.provider_id)
+      .maybeSingle();
+
+    if (providerError || !provider?.user_id) {
+      setMessage(
+        "Unable to find the provider account: " +
+          (providerError?.message || "Provider account not found.")
+      );
+      setSaving(null);
+      return;
+    }
+
+    const { data: hotels, error: hotelLookupError } = await supabase
+      .from("hotels")
+      .select("id")
+      .eq("user_id", provider.user_id);
+
+    if (hotelLookupError) {
+      setMessage(
+        "Unable to find the provider's hotel: " + hotelLookupError.message
+      );
+      setSaving(null);
+      return;
+    }
+
+    const reviewedAt = new Date().toISOString();
+
+    // Update the verification application using your actual columns.
     const { data, error } = await supabase
       .from("provider_verifications")
       .update({
         status,
-        verification_status: status,
-        verification_notes: notes.trim(),
-        verified_at:
-          status === "Approved" ? new Date().toISOString() : null,
+        reviewer_notes: notes.trim(),
+        reviewed_at: reviewedAt,
       })
       .eq("id", record.id)
       .eq("status", record.status || "Pending")
       .select("id");
 
     if (error) {
-      setMessage("Update failed: " + error.message);
-    } else if (!data || data.length === 0) {
-      setMessage(
-        "The application was not updated. Please refresh and check its current status."
-      );
-    } else {
-      setMessage(`Provider application ${status.toLowerCase()} successfully.`);
-      await loadRecords();
+      setMessage("Verification update failed: " + error.message);
+      setSaving(null);
+      return;
     }
 
+    if (!data || data.length === 0) {
+      setMessage(
+        "The application was not updated. Refresh and check its current status."
+      );
+      setSaving(null);
+      return;
+    }
+
+    // Synchronize the decision with every hotel belonging to this provider.
+    if (hotels && hotels.length > 0) {
+      const { error: hotelUpdateError } = await supabase
+        .from("hotels")
+        .update({
+          verification_status: status,
+          verification_notes: notes.trim(),
+          verified_at: status === "Approved" ? reviewedAt : null,
+        })
+        .eq("user_id", provider.user_id);
+
+      if (hotelUpdateError) {
+        setMessage(
+          `Application ${status.toLowerCase()}, but hotel verification could not be synchronized: ${hotelUpdateError.message}`
+        );
+        await loadRecords();
+        setSaving(null);
+        return;
+      }
+
+      setMessage(
+        status === "Approved"
+          ? "Provider approved. The hotel's blue verified tick is now activated."
+          : "Provider rejected. The hotel's verified tick has been removed."
+      );
+    } else {
+      setMessage(
+        `Provider application ${status.toLowerCase()}, but no hotel listing was found for this provider yet.`
+      );
+    }
+
+    await loadRecords();
     setSaving(null);
   }
 
-  function getStatus(record: Verification) {
-    return record.verification_status || record.status || "Pending";
-  }
-
   const pendingCount = records.filter(
-    (record) => getStatus(record).toLowerCase() === "pending"
+    (record) => (record.status || "Pending").toLowerCase() === "pending"
   ).length;
 
   const approvedCount = records.filter(
-    (record) => getStatus(record).toLowerCase() === "approved"
+    (record) => record.status?.toLowerCase() === "approved"
   ).length;
 
   const rejectedCount = records.filter(
-    (record) => getStatus(record).toLowerCase() === "rejected"
+    (record) => record.status?.toLowerCase() === "rejected"
   ).length;
 
-  const filtered = records.filter((record) => {
-    return (
+  const filtered = records.filter(
+    (record) =>
       filter === "All" ||
-      getStatus(record).toLowerCase() === filter.toLowerCase()
-    );
-  });
+      (record.status || "Pending").toLowerCase() === filter.toLowerCase()
+  );
 
   return (
     <main className="min-h-screen bg-gray-50">
@@ -272,7 +375,7 @@ export default function VerificationDashboard() {
         ) : (
           <div className="space-y-5">
             {filtered.map((record) => {
-              const status = getStatus(record);
+              const status = record.status || "Pending";
               const normalizedStatus = status.toLowerCase();
               const isPending = normalizedStatus === "pending";
               const isSaving = saving === record.id;
@@ -285,10 +388,7 @@ export default function VerificationDashboard() {
                   <div className="flex flex-col justify-between gap-5 md:flex-row">
                     <div className="min-w-0">
                       <h3 className="text-lg font-bold">
-                        {record.business_name ||
-                          record.hotel_name ||
-                          record.name ||
-                          "Provider application"}
+                        {record.business_name || "Provider application"}
                       </h3>
 
                       <p className="mt-2 text-sm text-gray-600">
@@ -296,7 +396,7 @@ export default function VerificationDashboard() {
                       </p>
 
                       <p className="text-sm text-gray-600">
-                        Provider ID: {record.provider_id || "Not specified"}
+                        Provider ID: {record.provider_id}
                       </p>
 
                       <p className="mt-3 text-sm text-gray-600">
@@ -304,13 +404,13 @@ export default function VerificationDashboard() {
                       </p>
 
                       <p className="text-sm text-gray-600">
-                        Date verified: {formatDate(record.verified_at)}
+                        Date reviewed: {formatDate(record.reviewed_at)}
                       </p>
 
                       <div className="mt-4 rounded-lg bg-gray-50 p-4">
                         <p className="text-sm font-semibold">Admin notes</p>
                         <p className="mt-1 whitespace-pre-wrap text-sm text-gray-600">
-                          {record.verification_notes || "No admin notes yet."}
+                          {record.reviewer_notes || "No admin notes yet."}
                         </p>
                       </div>
                     </div>
