@@ -15,6 +15,8 @@ const SUPABASE_KEY =
 const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 const IPN_ID = process.env.PESAPAL_IPN_ID;
 
+const COMMISSION_RATE = 10;
+
 const BOOKING_TABLES: Record<string, string[]> = {
   car: ["vehicle_bookings"],
   transfer: ["transfer_bookings"],
@@ -97,6 +99,169 @@ async function getBooking(
   return null;
 }
 
+async function getProviderId(
+  service: string,
+  booking: any
+): Promise<string> {
+  const supabase: any = getAdminClient();
+
+  let result: any;
+
+  if (service === "car") {
+    if (!booking.vehicle_id) {
+      throw new Error("The vehicle booking has no vehicle ID.");
+    }
+
+    const { data, error } = await supabase
+      .from("vehicles")
+      .select("provider_id")
+      .eq("id", booking.vehicle_id)
+      .maybeSingle();
+
+    if (error) {
+      throw new Error("Could not find the vehicle provider.");
+    }
+
+    result = data;
+  } else if (service === "transfer") {
+    if (!booking.transfer_service_id) {
+      throw new Error("The transfer booking has no service ID.");
+    }
+
+    const { data, error } = await supabase
+      .from("transfer_services")
+      .select("provider_id")
+      .eq("id", booking.transfer_service_id)
+      .maybeSingle();
+
+    if (error) {
+      throw new Error("Could not find the transfer provider.");
+    }
+
+    result = data;
+  } else {
+    throw new Error("Commissions are not enabled for this service.");
+  }
+
+  if (!result?.provider_id) {
+    throw new Error("The booking provider could not be identified.");
+  }
+
+  return String(result.provider_id);
+}
+
+async function recordSuccessfulPayment(
+  service: string,
+  bookingId: string,
+  booking: any,
+  trackingId: string,
+  paidAmount: number,
+  currency: string
+) {
+  if (service !== "car" && service !== "transfer") {
+    return;
+  }
+
+  const supabase: any = getAdminClient();
+  const customerUserId = booking.customer_user_id;
+
+  if (!customerUserId) {
+    throw new Error("The booking customer could not be identified.");
+  }
+
+  const providerId = await getProviderId(service, booking);
+
+  // Reuse an existing payment if Pesapal sends the same notification again.
+  const { data: existingPayment, error: existingPaymentError } =
+    await supabase
+      .from("payments")
+      .select("id, booking_id, booking_type, customer_user_id")
+      .eq("provider_transaction_id", trackingId)
+      .maybeSingle();
+
+  if (existingPaymentError) {
+    throw new Error("Could not check the existing payment record.");
+  }
+
+  let paymentId: string;
+
+  if (existingPayment) {
+    if (
+      String(existingPayment.booking_id) !== String(bookingId) ||
+      existingPayment.booking_type !== service
+    ) {
+      throw new Error(
+        "This Pesapal transaction is already linked to another booking."
+      );
+    }
+
+    paymentId = String(existingPayment.id);
+  } else {
+    const { data: newPayment, error: paymentError } = await supabase
+      .from("payments")
+      .insert({
+        customer_user_id: customerUserId,
+        booking_type: service,
+        booking_id: bookingId,
+        amount: paidAmount,
+        currency,
+        payment_method: "online",
+        payment_provider: "Pesapal",
+        provider_transaction_id: trackingId,
+        status: "paid",
+        paid_at: new Date().toISOString(),
+      })
+      .select("id")
+      .single();
+
+    if (paymentError || !newPayment?.id) {
+      throw new Error(
+        paymentError?.message || "Could not save the payment record."
+      );
+    }
+
+    paymentId = String(newPayment.id);
+  }
+
+  // Check before inserting so repeat callbacks do not create another commission.
+  const { data: existingCommission, error: commissionCheckError } =
+    await supabase
+      .from("commissions")
+      .select("id")
+      .eq("payment_id", paymentId)
+      .maybeSingle();
+
+  if (commissionCheckError) {
+    throw new Error("Could not check the existing commission record.");
+  }
+
+  if (!existingCommission) {
+    const commissionAmount = Number(
+      ((paidAmount * COMMISSION_RATE) / 100).toFixed(2)
+    );
+
+    const { error: commissionError } = await supabase
+      .from("commissions")
+      .insert({
+        provider_id: providerId,
+        payment_id: paymentId,
+        booking_type: service,
+        booking_id: bookingId,
+        booking_amount: paidAmount,
+        commission_rate: COMMISSION_RATE,
+        commission_amount: commissionAmount,
+        currency,
+        status: "pending",
+      });
+
+    if (commissionError) {
+      throw new Error(
+        commissionError.message || "Could not save the commission."
+      );
+    }
+  }
+}
+
 async function verifyPayment(
   trackingId: string,
   merchantReference: string
@@ -112,6 +277,14 @@ async function verifyPayment(
   const service = match[1];
   const bookingId = match[2];
 
+  // Property rentals must remain pay-at-provider until the 250-registration
+  // milestone is reached. Do not verify or record property online payments yet.
+  if (service === "property") {
+    throw new Error(
+      "Online payments for property rentals are not enabled yet."
+    );
+  }
+
   const booking = await getBooking(service, bookingId);
 
   if (!booking) {
@@ -126,6 +299,7 @@ async function verifyPayment(
 
   const bookingAmount = Number(booking.data.total_price);
   const paidAmount = Number(payment.amount);
+  const currency = String(payment.currency || "").toUpperCase();
 
   if (
     !Number.isFinite(bookingAmount) ||
@@ -136,8 +310,7 @@ async function verifyPayment(
   }
 
   if (
-    String(booking.data.currency).toUpperCase() !==
-    String(payment.currency).toUpperCase()
+    String(booking.data.currency).toUpperCase() !== currency
   ) {
     throw new Error("Payment currency does not match.");
   }
@@ -152,6 +325,17 @@ async function verifyPayment(
         : statusCode === 3
           ? "reversed"
           : "pending";
+
+  if (paymentStatus === "paid") {
+    await recordSuccessfulPayment(
+      service,
+      bookingId,
+      booking.data,
+      trackingId,
+      paidAmount,
+      currency
+    );
+  }
 
   if (paymentStatus !== "pending") {
     const supabase: any = getAdminClient();
@@ -192,6 +376,23 @@ export async function POST(request: NextRequest) {
     if (!service || !bookingId) {
       return NextResponse.json(
         { error: "Service and booking ID are required." },
+        { status: 400 }
+      );
+    }
+
+    if (service === "property") {
+      return NextResponse.json(
+        {
+          error:
+            "Online payments for property rentals are not enabled yet. Please pay the provider directly.",
+        },
+        { status: 403 }
+      );
+    }
+
+    if (service !== "car" && service !== "transfer") {
+      return NextResponse.json(
+        { error: "Unsupported payment service." },
         { status: 400 }
       );
     }
