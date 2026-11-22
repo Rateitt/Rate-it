@@ -20,6 +20,7 @@ type HotelPhoto = {
 export default function HotelsPage() {
   const [hotels, setHotels] = useState<Hotel[]>([]);
   const [photos, setPhotos] = useState<HotelPhoto[]>([]);
+  const [featuredHotelIds, setFeaturedHotelIds] = useState<number[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
 
@@ -34,17 +35,26 @@ export default function HotelsPage() {
       setLoading(true);
 
       try {
-        const { data: hotelsData, error: hotelsError } = await supabase
-          .from("hotels")
-          .select("id, hotel_name, location, description")
-          .order("created_at", { ascending: false });
+        const [
+          { data: hotelsData, error: hotelsError },
+          { data: photosData, error: photosError },
+          premiumResponse,
+        ] = await Promise.all([
+          supabase
+            .from("hotels")
+            .select("id, hotel_name, location, description")
+            .order("created_at", { ascending: false }),
+
+          supabase
+            .from("hotel_photos")
+            .select("id, hotel_id, image_url"),
+
+          fetch("/api/premium/featured-hotels", {
+            cache: "no-store",
+          }),
+        ]);
 
         if (hotelsError) throw hotelsError;
-
-        const { data: photosData, error: photosError } = await supabase
-          .from("hotel_photos")
-          .select("id, hotel_id, image_url");
-
         if (photosError) throw photosError;
 
         const uniqueHotels: Hotel[] = [];
@@ -64,6 +74,19 @@ export default function HotelsPage() {
 
         setHotels(uniqueHotels);
         setPhotos(photosData || []);
+
+        if (premiumResponse.ok) {
+          const premiumData = await premiumResponse.json();
+
+          setFeaturedHotelIds(
+            Array.isArray(premiumData.hotelIds)
+              ? premiumData.hotelIds.map(Number)
+              : []
+          );
+        } else {
+          console.error("Could not load Premium hotel listings.");
+          setFeaturedHotelIds([]);
+        }
       } catch (error) {
         console.error("Catalog synchronization failed:", error);
       } finally {
@@ -76,15 +99,24 @@ export default function HotelsPage() {
 
   const searchText = search.trim().toLowerCase();
 
-  const filteredHotels = hotels.filter((hotel) => {
-    if (!searchText) return true;
+  const filteredHotels = hotels
+    .filter((hotel) => {
+      if (!searchText) return true;
 
-    return (
-      hotel.hotel_name?.toLowerCase().includes(searchText) ||
-      hotel.location?.toLowerCase().includes(searchText) ||
-      hotel.description?.toLowerCase().includes(searchText)
-    );
-  });
+      return (
+        hotel.hotel_name?.toLowerCase().includes(searchText) ||
+        hotel.location?.toLowerCase().includes(searchText) ||
+        hotel.description?.toLowerCase().includes(searchText)
+      );
+    })
+    .sort((a, b) => {
+      const aPremium = featuredHotelIds.includes(a.id);
+      const bPremium = featuredHotelIds.includes(b.id);
+
+      if (aPremium === bPremium) return 0;
+
+      return aPremium ? -1 : 1;
+    });
 
   function getHotelImage(hotelId: number) {
     const foundPhoto = photos.find(
@@ -242,90 +274,115 @@ export default function HotelsPage() {
               gap: "20px",
             }}
           >
-            {filteredHotels.map((hotel) => (
-              <article
-                key={hotel.id}
-                style={{
-                  background: "#fff",
-                  borderRadius: "12px",
-                  overflow: "hidden",
-                  border: "1px solid #e5e5e5",
-                  display: "flex",
-                  flexDirection: "column",
-                }}
-              >
-                <div
-                  style={{
-                    height: "190px",
-                    width: "100%",
-                    background: "#e9e9e9",
-                  }}
-                >
-                  <img
-                    src={getHotelImage(hotel.id)}
-                    alt={hotel.hotel_name}
-                    style={{
-                      width: "100%",
-                      height: "100%",
-                      objectFit: "cover",
-                    }}
-                  />
-                </div>
+            {filteredHotels.map((hotel) => {
+              const isPremium = featuredHotelIds.includes(hotel.id);
 
-                <div
+              return (
+                <article
+                  key={hotel.id}
                   style={{
-                    padding: "20px",
+                    background: "#fff",
+                    borderRadius: "12px",
+                    overflow: "hidden",
+                    border: isPremium
+                      ? "2px solid #d4a017"
+                      : "1px solid #e5e5e5",
                     display: "flex",
                     flexDirection: "column",
-                    flex: 1,
                   }}
                 >
-                  <h3 style={{ margin: "0 0 8px", fontSize: "20px" }}>
-                    {hotel.hotel_name}
-                  </h3>
-
-                  <p
+                  <div
                     style={{
-                      margin: "0 0 10px",
-                      color: "#666",
-                      fontSize: "14px",
+                      height: "190px",
+                      width: "100%",
+                      background: "#e9e9e9",
+                      position: "relative",
                     }}
                   >
-                    📍 {hotel.location || "Location not provided"}
-                  </p>
+                    <img
+                      src={getHotelImage(hotel.id)}
+                      alt={hotel.hotel_name}
+                      style={{
+                        width: "100%",
+                        height: "100%",
+                        objectFit: "cover",
+                      }}
+                    />
 
-                  <p
+                    {isPremium && (
+                      <span
+                        style={{
+                          position: "absolute",
+                          top: "12px",
+                          left: "12px",
+                          background: "#d4a017",
+                          color: "#fff",
+                          padding: "7px 12px",
+                          borderRadius: "5px",
+                          fontSize: "12px",
+                          fontWeight: "bold",
+                        }}
+                      >
+                        PREMIUM
+                      </span>
+                    )}
+                  </div>
+
+                  <div
                     style={{
-                      color: "#555",
-                      fontSize: "14px",
-                      lineHeight: "1.5",
-                      minHeight: "42px",
+                      padding: "20px",
+                      display: "flex",
+                      flexDirection: "column",
                       flex: 1,
                     }}
                   >
-                    {hotel.description ||
-                      "Discover this hotel on Rate-It."}
-                  </p>
+                    <h3 style={{ margin: "0 0 8px", fontSize: "20px" }}>
+                      {hotel.hotel_name}
+                    </h3>
 
-                  <Link
-                    href={`/hotels/${hotel.id}`}
-                    style={{
-                      display: "block",
-                      textAlign: "center",
-                      background: "#000",
-                      color: "#fff",
-                      textDecoration: "none",
-                      padding: "13px",
-                      borderRadius: "8px",
-                      marginTop: "15px",
-                      fontWeight: "bold",
-                    }}
-                  >
-                    View Hotel
-                  </Link>
-                </div>
-              </article>
-            ))}
+                    <p
+                      style={{
+                        margin: "0 0 10px",
+                        color: "#666",
+                        fontSize: "14px",
+                      }}
+                    >
+                      📍 {hotel.location || "Location not provided"}
+                    </p>
+
+                    <p
+                      style={{
+                        color: "#555",
+                        fontSize: "14px",
+                        lineHeight: "1.5",
+                        minHeight: "42px",
+                        flex: 1,
+                      }}
+                    >
+                      {hotel.description ||
+                        "Discover this hotel on Rate-It."}
+                    </p>
+
+                    <Link
+                      href={`/hotels/${hotel.id}`}
+                      style={{
+                        display: "block",
+                        textAlign: "center",
+                        background: "#000",
+                        color: "#fff",
+                        textDecoration: "none",
+                        padding: "13px",
+                        borderRadius: "8px",
+                        marginTop: "15px",
+                        fontWeight: "bold",
+                      }}
+                    >
+                      View Hotel
+                    </Link>
+                  </div>
+                </article>
+              );
+            })}
           </div>
         )}
       </section>
