@@ -22,7 +22,12 @@ export default function PremiumPage() {
   const [selectedAccount, setSelectedAccount] = useState("");
   const [selectedPackage, setSelectedPackage] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
+  const [paying, setPaying] = useState(false);
   const [message, setMessage] = useState("");
+  const [email, setEmail] = useState("");
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
+  const [phone, setPhone] = useState("");
 
   useEffect(() => {
     async function loadAccounts() {
@@ -34,6 +39,8 @@ export default function PremiumPage() {
         setLoading(false);
         return;
       }
+
+      setEmail(userData.user.email || "");
 
       const userId = userData.user.id;
 
@@ -96,6 +103,74 @@ export default function PremiumPage() {
     (item) => item.days === selectedPackage
   );
 
+  async function handlePayment() {
+    if (!account || !chosenPackage) {
+      setMessage("Please select an account and Premium package.");
+      return;
+    }
+
+    if (!firstName.trim() || !lastName.trim() || !phone.trim()) {
+      setMessage("Please enter your first name, last name and phone number.");
+      return;
+    }
+
+    if (!email.trim()) {
+      setMessage("Please enter your email address.");
+      return;
+    }
+
+    setPaying(true);
+    setMessage("");
+
+    try {
+      const {
+        data: { session },
+        error: sessionError,
+      } = await supabase.auth.getSession();
+
+      if (sessionError || !session?.access_token) {
+        throw new Error("Your session has expired. Please sign in again.");
+      }
+
+      const response = await fetch("/api/pesapal/premium/checkout", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({
+          accountType: account.type,
+          accountId: account.id,
+          durationDays: chosenPackage.days,
+          firstName: firstName.trim(),
+          lastName: lastName.trim(),
+          email: email.trim(),
+          phone: phone.trim(),
+          countryCode: "UG",
+        }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || "Unable to start Premium payment.");
+      }
+
+      if (!result.redirectUrl) {
+        throw new Error("Pesapal did not provide a payment link.");
+      }
+
+      window.location.assign(result.redirectUrl);
+    } catch (error) {
+      setMessage(
+        error instanceof Error
+          ? error.message
+          : "Something went wrong. Please try again."
+      );
+      setPaying(false);
+    }
+  }
+
   return (
     <main className="min-h-screen bg-gray-50 px-4 py-12">
       <div className="mx-auto max-w-5xl">
@@ -112,7 +187,7 @@ export default function PremiumPage() {
           <p className="text-center text-gray-600">
             Loading your account...
           </p>
-        ) : message ? (
+        ) : message && accounts.length === 0 ? (
           <div className="rounded-xl border border-gray-200 bg-white p-6 text-center">
             <p className="text-gray-700">{message}</p>
             <div className="mt-4 flex flex-wrap justify-center gap-4">
@@ -206,7 +281,10 @@ export default function PremiumPage() {
 
                     <button
                       type="button"
-                      onClick={() => setSelectedPackage(item.days)}
+                      onClick={() => {
+                        setSelectedPackage(item.days);
+                        setMessage("");
+                      }}
                       className={`mt-6 w-full rounded-lg px-4 py-3 font-semibold ${
                         selectedPackage === item.days
                           ? "bg-blue-700 text-white"
@@ -223,24 +301,98 @@ export default function PremiumPage() {
             </section>
 
             {chosenPackage && account && (
-              <section className="mt-8 rounded-xl border border-blue-200 bg-white p-6 text-center">
-                <h2 className="text-xl font-bold text-gray-900">
-                  Package selected
+              <section className="mt-8 rounded-xl border border-blue-200 bg-white p-6">
+                <h2 className="text-center text-xl font-bold text-gray-900">
+                  Complete your Premium purchase
                 </h2>
 
-                <p className="mt-3 text-gray-700">
+                <p className="mt-3 text-center text-gray-700">
                   {account.name} — {chosenPackage.days} days
                 </p>
 
-                <p className="mt-2 text-2xl font-bold text-gray-900">
+                <p className="mt-2 text-center text-2xl font-bold text-gray-900">
                   ${chosenPackage.price}
                 </p>
 
-                <p className="mt-4 text-sm text-gray-500">
-                  Your selection is ready. Pesapal payment and automatic
-                  Premium activation will be connected in the next step.
-                  No payment has been made.
-                </p>
+                <div className="mx-auto mt-6 max-w-xl space-y-4">
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-gray-700">
+                      First name
+                    </label>
+                    <input
+                      type="text"
+                      value={firstName}
+                      onChange={(e) => setFirstName(e.target.value)}
+                      placeholder="Enter your first name"
+                      className="w-full rounded-lg border border-gray-300 px-4 py-3"
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-gray-700">
+                      Last name
+                    </label>
+                    <input
+                      type="text"
+                      value={lastName}
+                      onChange={(e) => setLastName(e.target.value)}
+                      placeholder="Enter your last name"
+                      className="w-full rounded-lg border border-gray-300 px-4 py-3"
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-gray-700">
+                      Email address
+                    </label>
+                    <input
+                      type="email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder="Enter your email"
+                      className="w-full rounded-lg border border-gray-300 px-4 py-3"
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-gray-700">
+                      Phone number
+                    </label>
+                    <input
+                      type="tel"
+                      value={phone}
+                      onChange={(e) => setPhone(e.target.value)}
+                      placeholder="Enter your phone number"
+                      className="w-full rounded-lg border border-gray-300 px-4 py-3"
+                      required
+                    />
+                  </div>
+
+                  {message && (
+                    <p className="rounded-lg bg-red-50 p-3 text-sm text-red-700">
+                      {message}
+                    </p>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={handlePayment}
+                    disabled={paying}
+                    className="w-full rounded-lg bg-blue-700 px-6 py-4 font-bold text-white hover:bg-blue-800 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {paying
+                      ? "Connecting to Pesapal..."
+                      : `Pay $${chosenPackage.price} with Pesapal`}
+                  </button>
+
+                  <p className="text-center text-xs text-gray-500">
+                    Your Premium subscription will only activate after
+                    successful payment confirmation from Pesapal.
+                  </p>
+                </div>
               </section>
             )}
           </>
