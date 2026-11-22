@@ -171,7 +171,6 @@ async function recordSuccessfulPayment(
 
   const providerId = await getProviderId(service, booking);
 
-  // Reuse an existing payment if Pesapal sends the same notification again.
   const { data: existingPayment, error: existingPaymentError } =
     await supabase
       .from("payments")
@@ -223,7 +222,6 @@ async function recordSuccessfulPayment(
     paymentId = String(newPayment.id);
   }
 
-  // Check before inserting so repeat callbacks do not create another commission.
   const { data: existingCommission, error: commissionCheckError } =
     await supabase
       .from("commissions")
@@ -262,10 +260,174 @@ async function recordSuccessfulPayment(
   }
 }
 
+/**
+ * Verify and activate a Premium subscription after Pesapal confirms payment.
+ * Premium payments do not generate booking commissions.
+ */
+async function verifyPremiumPayment(
+  trackingId: string,
+  merchantReference: string
+) {
+  const match = merchantReference.match(/^RI-PREMIUM-(.+)$/);
+
+  if (!match) {
+    throw new Error("Invalid Premium payment reference.");
+  }
+
+  const subscriptionId = match[1];
+  const supabase: any = getAdminClient();
+
+  const { data: subscription, error: subscriptionError } =
+    await supabase
+      .from("premium_subscriptions")
+      .select("*")
+      .eq("id", subscriptionId)
+      .maybeSingle();
+
+  if (subscriptionError || !subscription) {
+    throw new Error("Premium subscription was not found.");
+  }
+
+  if (!subscription.payment_id) {
+    throw new Error("The Premium subscription has no payment record.");
+  }
+
+  const { data: paymentRecord, error: paymentRecordError } =
+    await supabase
+      .from("payments")
+      .select("*")
+      .eq("id", subscription.payment_id)
+      .maybeSingle();
+
+  if (paymentRecordError || !paymentRecord) {
+    throw new Error("Premium payment record was not found.");
+  }
+
+  if (
+    paymentRecord.booking_type !== "premium" ||
+    String(paymentRecord.booking_id) !== String(subscriptionId)
+  ) {
+    throw new Error("Premium payment record does not match the subscription.");
+  }
+
+  const payment = await getPesapalTransactionStatus(trackingId);
+
+  if (payment.merchant_reference !== merchantReference) {
+    throw new Error("Premium payment reference does not match.");
+  }
+
+  const expectedAmount = Number(subscription.amount);
+  const paidAmount = Number(payment.amount);
+  const expectedCurrency = String(subscription.currency || "").toUpperCase();
+  const paidCurrency = String(payment.currency || "").toUpperCase();
+
+  if (
+    !Number.isFinite(expectedAmount) ||
+    !Number.isFinite(paidAmount) ||
+    Math.abs(expectedAmount - paidAmount) > 0.01
+  ) {
+    throw new Error("Premium payment amount does not match.");
+  }
+
+  if (!expectedCurrency || expectedCurrency !== paidCurrency) {
+    throw new Error("Premium payment currency does not match.");
+  }
+
+  if (
+    paymentRecord.provider_transaction_id &&
+    paymentRecord.provider_transaction_id !== trackingId
+  ) {
+    throw new Error("This Premium subscription has another Pesapal transaction.");
+  }
+
+  const statusCode = Number(payment.status_code);
+
+  const paymentStatus =
+    statusCode === 1
+      ? "paid"
+      : statusCode === 2
+        ? "failed"
+        : statusCode === 3
+          ? "reversed"
+          : "pending";
+
+  const paymentUpdate: Record<string, any> = {
+    status: paymentStatus,
+    provider_transaction_id: trackingId,
+    payment_provider: "Pesapal",
+    payment_method: "online",
+  };
+
+  if (paymentStatus === "paid") {
+    paymentUpdate.paid_at =
+      paymentRecord.paid_at || new Date().toISOString();
+  }
+
+  const { error: updatePaymentError } = await supabase
+    .from("payments")
+    .update(paymentUpdate)
+    .eq("id", subscription.payment_id);
+
+  if (updatePaymentError) {
+    throw new Error("Could not update the Premium payment record.");
+  }
+
+  if (paymentStatus === "paid") {
+    // Repeated successful IPNs must not restart an already active subscription.
+    if (subscription.status !== "active") {
+      const startsAt = new Date();
+      const expiresAt = new Date(startsAt);
+
+      expiresAt.setDate(
+        expiresAt.getDate() + Number(subscription.duration_days)
+      );
+
+      const { error: activateError } = await supabase
+        .from("premium_subscriptions")
+        .update({
+          status: "active",
+          starts_at: startsAt.toISOString(),
+          expires_at: expiresAt.toISOString(),
+          updated_at: startsAt.toISOString(),
+        })
+        .eq("id", subscriptionId);
+
+      if (activateError) {
+        throw new Error("Payment succeeded, but Premium activation failed.");
+      }
+    }
+  } else if (paymentStatus === "reversed") {
+    if (subscription.status === "active") {
+      const { error: cancelError } = await supabase
+        .from("premium_subscriptions")
+        .update({
+          status: "cancelled",
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", subscriptionId);
+
+      if (cancelError) {
+        throw new Error("Could not cancel the reversed Premium subscription.");
+      }
+    }
+  }
+
+  return {
+    service: "premium",
+    bookingId: subscriptionId,
+    paymentStatus,
+  };
+}
+
 async function verifyPayment(
   trackingId: string,
   merchantReference: string
 ) {
+  // Premium payments use a separate verification and activation process.
+  if (merchantReference.startsWith("RI-PREMIUM-")) {
+    return verifyPremiumPayment(trackingId, merchantReference);
+  }
+
   const match = merchantReference.match(
     /^RI-(car|transfer|property)-(.+)$/
   );
@@ -277,8 +439,6 @@ async function verifyPayment(
   const service = match[1];
   const bookingId = match[2];
 
-  // Property rentals must remain pay-at-provider until the 250-registration
-  // milestone is reached. Do not verify or record property online payments yet.
   if (service === "property") {
     throw new Error(
       "Online payments for property rentals are not enabled yet."
