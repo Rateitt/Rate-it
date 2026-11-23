@@ -23,6 +23,24 @@ type Provider = {
   verification_status: string;
 };
 
+type PayoutDetails = {
+  payout_method: string;
+  mobile_money_network: string;
+  mobile_money_phone: string;
+  bank_name: string;
+  bank_account_name: string;
+  bank_account_number: string;
+};
+
+const emptyPayoutDetails: PayoutDetails = {
+  payout_method: "mobile_money",
+  mobile_money_network: "",
+  mobile_money_phone: "",
+  bank_name: "",
+  bank_account_name: "",
+  bank_account_number: "",
+};
+
 export default function ProviderDashboard() {
   const [provider, setProvider] = useState<Provider | null>(null);
   const [listings, setListings] = useState<Item[]>([]);
@@ -35,6 +53,9 @@ export default function ProviderDashboard() {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
   const [bookingError, setBookingError] = useState("");
+  const [payoutDetails, setPayoutDetails] =
+    useState<PayoutDetails>(emptyPayoutDetails);
+  const [payoutDetailsSaved, setPayoutDetailsSaved] = useState(false);
 
   const [property, setProperty] = useState({
     title: "",
@@ -168,6 +189,37 @@ export default function ProviderDashboard() {
 
       setProvider(profile as Provider);
 
+      // Load the provider's saved payout destination.
+      const { data: payoutDetailsData, error: payoutDetailsError } =
+        await supabase
+          .from("provider_payout_details")
+          .select("*")
+          .eq("provider_id", profile.id)
+          .maybeSingle();
+
+      if (payoutDetailsError) {
+        throw new Error(
+          `Payout details could not be loaded: ${payoutDetailsError.message}`
+        );
+      }
+
+      if (payoutDetailsData) {
+        setPayoutDetails({
+          payout_method: payoutDetailsData.payout_method || "mobile_money",
+          mobile_money_network:
+            payoutDetailsData.mobile_money_network || "",
+          mobile_money_phone: payoutDetailsData.mobile_money_phone || "",
+          bank_name: payoutDetailsData.bank_name || "",
+          bank_account_name: payoutDetailsData.bank_account_name || "",
+          bank_account_number:
+            payoutDetailsData.bank_account_number || "",
+        });
+        setPayoutDetailsSaved(true);
+      } else {
+        setPayoutDetails(emptyPayoutDetails);
+        setPayoutDetailsSaved(false);
+      }
+
       const type = profile.provider_type;
       const table = listingTable(type);
 
@@ -221,7 +273,9 @@ export default function ProviderDashboard() {
 
       if (commissionError) {
         setCommissions([]);
-        setMessage(`Commission records could not be loaded: ${commissionError.message}`);
+        setMessage(
+          `Commission records could not be loaded: ${commissionError.message}`
+        );
       } else {
         setCommissions(commissionData || []);
       }
@@ -260,6 +314,84 @@ export default function ProviderDashboard() {
   useEffect(() => {
     loadDashboard();
   }, []);
+
+  async function savePayoutDetails(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!provider) return;
+
+    setSaving(true);
+    setMessage("");
+
+    try {
+      const method = payoutDetails.payout_method;
+
+      if (method === "mobile_money") {
+        if (
+          !payoutDetails.mobile_money_network.trim() ||
+          !payoutDetails.mobile_money_phone.trim()
+        ) {
+          throw new Error(
+            "Enter your mobile money network and phone number."
+          );
+        }
+      } else if (method === "bank_transfer") {
+        if (
+          !payoutDetails.bank_name.trim() ||
+          !payoutDetails.bank_account_name.trim() ||
+          !payoutDetails.bank_account_number.trim()
+        ) {
+          throw new Error(
+            "Enter your bank name, account name and account number."
+          );
+        }
+      } else {
+        throw new Error("Please select a valid payout method.");
+      }
+
+      const payload = {
+        provider_id: provider.id,
+        payout_method: method,
+        mobile_money_network:
+          method === "mobile_money"
+            ? payoutDetails.mobile_money_network.trim()
+            : null,
+        mobile_money_phone:
+          method === "mobile_money"
+            ? payoutDetails.mobile_money_phone.trim()
+            : null,
+        bank_name:
+          method === "bank_transfer"
+            ? payoutDetails.bank_name.trim()
+            : null,
+        bank_account_name:
+          method === "bank_transfer"
+            ? payoutDetails.bank_account_name.trim()
+            : null,
+        bank_account_number:
+          method === "bank_transfer"
+            ? payoutDetails.bank_account_number.trim()
+            : null,
+        verification_status: "pending",
+        updated_at: new Date().toISOString(),
+      };
+
+      const { error } = await supabase
+        .from("provider_payout_details")
+        .upsert(payload, { onConflict: "provider_id" });
+
+      if (error) throw error;
+
+      setPayoutDetailsSaved(true);
+      setMessage(
+        "Your payout details have been saved. They are awaiting verification."
+      );
+    } catch (error: any) {
+      setMessage(error.message || "Could not save payout details.");
+    } finally {
+      setSaving(false);
+    }
+  }
 
   async function saveListing(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -434,6 +566,7 @@ export default function ProviderDashboard() {
     "availability",
     "commissions",
     "payouts",
+    "payout details",
   ];
 
   return (
@@ -747,6 +880,165 @@ export default function ProviderDashboard() {
               </div>
             ))
           )}
+        </section>
+      )}
+
+      {activeTab === "payout details" && (
+        <section className="max-w-2xl space-y-4 rounded-xl border p-5">
+          <div>
+            <h2 className="text-xl font-bold">Payout Details</h2>
+            <p className="mt-1 text-sm text-gray-600">
+              Add the mobile-money number or bank account where your eligible
+              car-rental and airport-transfer earnings can be paid.
+            </p>
+          </div>
+
+          {payoutDetailsSaved && (
+            <p className="rounded-lg border border-green-200 bg-green-50 p-3 text-sm text-green-800">
+              Payout details have been saved. Verification may still be pending.
+            </p>
+          )}
+
+          <form onSubmit={savePayoutDetails} className="space-y-4">
+            <div>
+              <label className="mb-1 block font-semibold">
+                Payout method
+              </label>
+              <select
+                required
+                className="w-full rounded border p-3"
+                value={payoutDetails.payout_method}
+                onChange={(e) =>
+                  setPayoutDetails({
+                    ...payoutDetails,
+                    payout_method: e.target.value,
+                  })
+                }
+              >
+                <option value="mobile_money">Mobile money</option>
+                <option value="bank_transfer">Bank transfer</option>
+              </select>
+            </div>
+
+            {payoutDetails.payout_method === "mobile_money" && (
+              <>
+                <div>
+                  <label className="mb-1 block font-semibold">
+                    Mobile money network
+                  </label>
+                  <select
+                    required
+                    className="w-full rounded border p-3"
+                    value={payoutDetails.mobile_money_network}
+                    onChange={(e) =>
+                      setPayoutDetails({
+                        ...payoutDetails,
+                        mobile_money_network: e.target.value,
+                      })
+                    }
+                  >
+                    <option value="">Select network</option>
+                    <option value="MTN Mobile Money">MTN Mobile Money</option>
+                    <option value="Airtel Money">Airtel Money</option>
+                    <option value="Other">Other</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="mb-1 block font-semibold">
+                    Mobile money phone number
+                  </label>
+                  <input
+                    required
+                    type="tel"
+                    autoComplete="tel"
+                    placeholder="e.g. +2567XXXXXXXX"
+                    className="w-full rounded border p-3"
+                    value={payoutDetails.mobile_money_phone}
+                    onChange={(e) =>
+                      setPayoutDetails({
+                        ...payoutDetails,
+                        mobile_money_phone: e.target.value,
+                      })
+                    }
+                  />
+                </div>
+              </>
+            )}
+
+            {payoutDetails.payout_method === "bank_transfer" && (
+              <>
+                <div>
+                  <label className="mb-1 block font-semibold">
+                    Bank name
+                  </label>
+                  <input
+                    required
+                    placeholder="Bank name"
+                    className="w-full rounded border p-3"
+                    value={payoutDetails.bank_name}
+                    onChange={(e) =>
+                      setPayoutDetails({
+                        ...payoutDetails,
+                        bank_name: e.target.value,
+                      })
+                    }
+                  />
+                </div>
+
+                <div>
+                  <label className="mb-1 block font-semibold">
+                    Account holder name
+                  </label>
+                  <input
+                    required
+                    placeholder="Name on bank account"
+                    className="w-full rounded border p-3"
+                    value={payoutDetails.bank_account_name}
+                    onChange={(e) =>
+                      setPayoutDetails({
+                        ...payoutDetails,
+                        bank_account_name: e.target.value,
+                      })
+                    }
+                  />
+                </div>
+
+                <div>
+                  <label className="mb-1 block font-semibold">
+                    Bank account number
+                  </label>
+                  <input
+                    required
+                    inputMode="numeric"
+                    autoComplete="off"
+                    placeholder="Bank account number"
+                    className="w-full rounded border p-3"
+                    value={payoutDetails.bank_account_number}
+                    onChange={(e) =>
+                      setPayoutDetails({
+                        ...payoutDetails,
+                        bank_account_number: e.target.value,
+                      })
+                    }
+                  />
+                </div>
+              </>
+            )}
+
+            <button
+              type="submit"
+              disabled={saving}
+              className="w-full rounded-lg bg-blue-700 p-3 font-semibold text-white disabled:opacity-50"
+            >
+              {saving ? "Saving payout details..." : "Save Payout Details"}
+            </button>
+          </form>
+
+          <p className="text-xs text-gray-500">
+            Your payout details are stored in a protected database table.
+            Saving them does not itself send money or mark a payout as paid.
+          </p>
         </section>
       )}
     </main>
