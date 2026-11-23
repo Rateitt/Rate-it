@@ -23,8 +23,10 @@ export default function ProviderSignupPage() {
     setMessage("");
 
     try {
+      const cleanEmail = email.trim().toLowerCase();
+
       const { data, error } = await supabase.auth.signUp({
-        email: email.trim(),
+        email: cleanEmail,
         password,
         options: {
           data: {
@@ -45,32 +47,34 @@ export default function ProviderSignupPage() {
 
       if (!data.session) {
         setMessage(
-          "Your account has been created. Please check your email to confirm your address. Your provider profile will need to be completed after you sign in."
+          "Your account has been created. Please confirm your email, then sign in. Your provider profile must be completed after confirmation."
         );
         return;
       }
 
       const { error: profileError } = await supabase
         .from("providers")
-        .insert({
-          user_id: data.user.id,
-          business_name: businessName.trim(),
-          provider_type: providerType,
-          contact_name: contactName.trim(),
-          phone: phone.trim(),
-          email: email.trim(),
-          business_address: businessAddress.trim(),
-          verification_status: "pending",
-        });
+        .upsert(
+          {
+            user_id: data.user.id,
+            business_name: businessName.trim(),
+            provider_type: providerType,
+            contact_name: contactName.trim(),
+            phone: phone.trim(),
+            email: cleanEmail,
+            business_address: businessAddress.trim(),
+            verification_status: "pending",
+          },
+          { onConflict: "user_id" }
+        );
 
       if (profileError) throw profileError;
 
       router.push("/providers/dashboard");
     } catch (error: unknown) {
-      const errorMessage =
-        error instanceof Error ? error.message : "Registration failed.";
-
-      setMessage(errorMessage);
+      setMessage(
+        error instanceof Error ? error.message : "Registration failed."
+      );
     } finally {
       setLoading(false);
     }
@@ -89,27 +93,18 @@ export default function ProviderSignupPage() {
 
         <form onSubmit={handleSignup} className="space-y-4">
           <div>
-            <label className="mb-1 block font-medium">
-              Business Name
-            </label>
-            <input
-              required
-              value={businessName}
+            <label className="mb-1 block font-medium">Business Name</label>
+            <input required value={businessName}
               onChange={(e) => setBusinessName(e.target.value)}
               className="w-full rounded-lg border p-3"
-              placeholder="Enter business name"
-            />
+              placeholder="Enter business name" />
           </div>
 
           <div>
-            <label className="mb-1 block font-medium">
-              Provider Type
-            </label>
-            <select
-              value={providerType}
+            <label className="mb-1 block font-medium">Provider Type</label>
+            <select value={providerType}
               onChange={(e) => setProviderType(e.target.value)}
-              className="w-full rounded-lg border p-3"
-            >
+              className="w-full rounded-lg border p-3">
               <option value="property_rental">Property Rental</option>
               <option value="car_rental">Car Rental</option>
               <option value="airport_transfer">Airport Transfer</option>
@@ -117,71 +112,44 @@ export default function ProviderSignupPage() {
           </div>
 
           <div>
-            <label className="mb-1 block font-medium">
-              Contact Person
-            </label>
-            <input
-              required
-              value={contactName}
+            <label className="mb-1 block font-medium">Contact Person</label>
+            <input required value={contactName}
               onChange={(e) => setContactName(e.target.value)}
               className="w-full rounded-lg border p-3"
-              placeholder="Full name"
-            />
+              placeholder="Full name" />
           </div>
 
           <div>
-            <label className="mb-1 block font-medium">
-              Phone Number
-            </label>
-            <input
-              required
-              value={phone}
+            <label className="mb-1 block font-medium">Phone Number</label>
+            <input required value={phone}
               onChange={(e) => setPhone(e.target.value)}
               className="w-full rounded-lg border p-3"
-              placeholder="Phone number"
-            />
+              placeholder="Phone number" />
           </div>
 
           <div>
-            <label className="mb-1 block font-medium">
-              Email Address
-            </label>
-            <input
-              required
-              type="email"
-              value={email}
+            <label className="mb-1 block font-medium">Email Address</label>
+            <input required type="email" value={email}
               onChange={(e) => setEmail(e.target.value)}
               className="w-full rounded-lg border p-3"
-              placeholder="Email address"
-            />
+              placeholder="Email address" />
           </div>
 
           <div>
-            <label className="mb-1 block font-medium">
-              Business Address
-            </label>
-            <input
-              required
-              value={businessAddress}
+            <label className="mb-1 block font-medium">Business Address</label>
+            <input required value={businessAddress}
               onChange={(e) => setBusinessAddress(e.target.value)}
               className="w-full rounded-lg border p-3"
-              placeholder="City and business address"
-            />
+              placeholder="City and business address" />
           </div>
 
           <div>
-            <label className="mb-1 block font-medium">
-              Password
-            </label>
-            <input
-              required
-              type="password"
-              minLength={6}
+            <label className="mb-1 block font-medium">Password</label>
+            <input required type="password" minLength={6}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               className="w-full rounded-lg border p-3"
-              placeholder="Create a password"
-            />
+              placeholder="Create a password" />
           </div>
 
           {message && (
@@ -190,11 +158,8 @@ export default function ProviderSignupPage() {
             </p>
           )}
 
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full rounded-lg bg-blue-600 p-3 font-semibold text-white disabled:opacity-50"
-          >
+          <button type="submit" disabled={loading}
+            className="w-full rounded-lg bg-blue-600 p-3 font-semibold text-white disabled:opacity-50">
             {loading ? "Creating Account..." : "Register as Provider"}
           </button>
         </form>
