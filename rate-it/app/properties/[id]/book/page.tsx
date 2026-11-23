@@ -14,7 +14,42 @@ type Property = {
   price?: number;
   rent_price?: number;
   currency?: string;
+  is_premium?: boolean;
+  premium?: boolean;
+  premium_status?: string;
+  subscription_status?: string;
+  premium_expires_at?: string;
+  subscription_expires_at?: string;
+  featured_until?: string;
 };
+
+function isPremiumActive(property: Property): boolean {
+  const status = (
+    property.premium_status ||
+    property.subscription_status ||
+    ""
+  ).toLowerCase();
+
+  const markedPremium =
+    property.is_premium === true ||
+    property.premium === true ||
+    status === "active" ||
+    status === "premium" ||
+    status === "approved";
+
+  if (!markedPremium) return false;
+
+  const expiry =
+    property.premium_expires_at ||
+    property.subscription_expires_at ||
+    property.featured_until;
+
+  if (expiry && new Date(expiry).getTime() <= Date.now()) {
+    return false;
+  }
+
+  return true;
+}
 
 export default function PropertyBookingPage() {
   const params = useParams();
@@ -46,7 +81,7 @@ export default function PropertyBookingPage() {
         return;
       }
 
-      setProperty(data);
+      setProperty(data as Property);
 
       const price = Number(
         data.price_per_night ??
@@ -240,12 +275,22 @@ export default function PropertyBookingPage() {
     property?.property_name ||
     "Property";
 
+  const premiumActive = property ? isPremiumActive(property) : false;
+
   return (
     <main className="min-h-screen bg-gray-50 px-4 py-10">
       <div className="mx-auto max-w-2xl rounded-xl bg-white p-6 shadow">
-        <h1 className="mb-2 text-2xl font-bold">
-          Book {propertyName}
-        </h1>
+        <div className="mb-2 flex flex-wrap items-center gap-3">
+          <h1 className="text-2xl font-bold">
+            Book {propertyName}
+          </h1>
+
+          {premiumActive && (
+            <span className="rounded-full border border-amber-300 bg-amber-100 px-3 py-1 text-sm font-bold text-amber-800">
+              ★ PREMIUM
+            </span>
+          )}
+        </div>
 
         <p className="mb-6 text-sm text-gray-600">
           Choose your dates and confirm your booking details.
