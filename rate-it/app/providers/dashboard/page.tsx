@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import type { FormEvent } from "react";
 import { createClient } from "@supabase/supabase-js";
 
 const supabase = createClient(
@@ -78,23 +79,52 @@ export default function ProviderDashboard() {
     currency: "UGX",
   });
 
-  const listingTable = (type: string) => {
+  function listingTable(type: string) {
     if (type === "car_rental") return "vehicles";
     if (type === "airport_transfer") return "transfer_services";
-    return "properties";
-  };
+    return "property";
+  }
 
-  const bookingTable = (type: string) => {
+  function bookingTable(type: string) {
     if (type === "car_rental") return "vehicle_bookings";
     if (type === "airport_transfer") return "transfer_bookings";
     return "property_bookings";
-  };
+  }
 
-  const bookingForeignKey = (type: string) => {
+  function bookingForeignKey(type: string) {
     if (type === "car_rental") return "vehicle_id";
     if (type === "airport_transfer") return "transfer_service_id";
     return "property_id";
-  };
+  }
+
+  function isPremiumActive(item: Item) {
+    const status = String(
+      item.premium_status || item.subscription_status || ""
+    ).toLowerCase();
+
+    const explicitlyPremium =
+      item.is_premium === true ||
+      item.premium === true ||
+      status === "active" ||
+      status === "premium" ||
+      status === "approved";
+
+    if (!explicitlyPremium) return false;
+
+    const expiry =
+      item.premium_expires_at ||
+      item.subscription_expires_at ||
+      item.featured_until;
+
+    if (!expiry) return true;
+
+    const expiryDate = new Date(expiry);
+
+    return (
+      !Number.isNaN(expiryDate.getTime()) &&
+      expiryDate.getTime() >= Date.now()
+    );
+  }
 
   async function loadDashboard() {
     setLoading(true);
@@ -140,6 +170,12 @@ export default function ProviderDashboard() {
       if (listingError) throw listingError;
 
       const loadedListings = listingData || [];
+
+      loadedListings.sort(
+        (a: Item, b: Item) =>
+          Number(isPremiumActive(b)) - Number(isPremiumActive(a))
+      );
+
       setListings(loadedListings);
 
       const listingIds = loadedListings.map((item: Item) => item.id);
@@ -198,7 +234,7 @@ export default function ProviderDashboard() {
     loadDashboard();
   }, []);
 
-  async function saveListing(event: React.FormEvent<HTMLFormElement>) {
+  async function saveListing(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
     if (!provider) return;
@@ -327,20 +363,15 @@ export default function ProviderDashboard() {
   }
 
   function money(value: any, currency = "UGX") {
-    const amount = Number(value || 0);
-    return `${currency} ${amount.toLocaleString()}`;
+    return `${currency} ${Number(value || 0).toLocaleString()}`;
   }
 
   function formatDate(value: any) {
     if (!value) return "Not available";
-
     const date = new Date(value);
-
-    if (Number.isNaN(date.getTime())) {
-      return "Not available";
-    }
-
-    return date.toLocaleString();
+    return Number.isNaN(date.getTime())
+      ? "Not available"
+      : date.toLocaleString();
   }
 
   function displayName(item: Item) {
@@ -385,31 +416,18 @@ export default function ProviderDashboard() {
           <h1 className="text-3xl font-bold">Provider Dashboard</h1>
           <p className="text-gray-600">{provider.business_name}</p>
         </div>
-
-        <button
-          onClick={signOut}
-          className="rounded-lg bg-gray-900 px-4 py-2 text-white"
-        >
+        <button onClick={signOut} className="rounded-lg bg-gray-900 px-4 py-2 text-white">
           Sign out
         </button>
       </div>
 
       <div className="rounded-xl border p-4">
-        <p>
-          <strong>Business:</strong> {provider.business_name}
-        </p>
-        <p>
-          <strong>Provider type:</strong>{" "}
-          {provider.provider_type.replaceAll("_", " ")}
-        </p>
-        <p>
-          <strong>Email:</strong> {provider.email}
-        </p>
+        <p><strong>Business:</strong> {provider.business_name}</p>
+        <p><strong>Provider type:</strong> {provider.provider_type.replaceAll("_", " ")}</p>
+        <p><strong>Email:</strong> {provider.email}</p>
         <p>
           <strong>Verification:</strong>{" "}
-          <span className="capitalize">
-            {provider.verification_status || "pending"}
-          </span>
+          <span className="capitalize">{provider.verification_status || "pending"}</span>
         </p>
       </div>
 
@@ -425,9 +443,7 @@ export default function ProviderDashboard() {
             key={tab}
             onClick={() => setActiveTab(tab)}
             className={`rounded-lg px-4 py-2 capitalize ${
-              activeTab === tab
-                ? "bg-blue-700 text-white"
-                : "bg-gray-100 text-gray-800"
+              activeTab === tab ? "bg-blue-700 text-white" : "bg-gray-100 text-gray-800"
             }`}
           >
             {tab}
@@ -459,14 +475,24 @@ export default function ProviderDashboard() {
             <p>You have not added any listings yet.</p>
           ) : (
             listings.map((item) => (
-              <div key={item.id} className="rounded-xl border p-4">
-                <h3 className="font-semibold">{displayName(item)}</h3>
+              <div
+                key={item.id}
+                className={`rounded-xl border p-4 ${
+                  isPremiumActive(item) ? "border-yellow-500 bg-yellow-50" : ""
+                }`}
+              >
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <h3 className="font-semibold">{displayName(item)}</h3>
+                  {isPremiumActive(item) && (
+                    <span className="rounded-full bg-yellow-400 px-3 py-1 text-sm font-bold text-yellow-950">
+                      ★ PREMIUM
+                    </span>
+                  )}
+                </div>
                 <p className="text-sm text-gray-600">
                   Status: {item.status || "Not specified"}
                 </p>
-                <p className="break-all text-xs text-gray-400">
-                  Listing ID: {item.id}
-                </p>
+                <p className="break-all text-xs text-gray-400">Listing ID: {item.id}</p>
               </div>
             ))
           )}
@@ -476,7 +502,6 @@ export default function ProviderDashboard() {
       {activeTab === "add listing" && (
         <section className="rounded-xl border p-5">
           <h2 className="mb-4 text-xl font-bold">Add a New Listing</h2>
-
           <form onSubmit={saveListing} className="space-y-3">
             {provider.provider_type === "property_rental" && (
               <>
@@ -532,11 +557,7 @@ export default function ProviderDashboard() {
               </>
             )}
 
-            <button
-              type="submit"
-              disabled={saving}
-              className="w-full rounded-lg bg-blue-700 p-3 font-semibold text-white disabled:opacity-50"
-            >
+            <button type="submit" disabled={saving} className="w-full rounded-lg bg-blue-700 p-3 font-semibold text-white disabled:opacity-50">
               {saving ? "Saving..." : "Submit Listing"}
             </button>
           </form>
@@ -579,14 +600,9 @@ export default function ProviderDashboard() {
                 <div>
                   <p><strong>Date:</strong> {item.available_date}</p>
                   <p><strong>Available:</strong> {item.is_available ? "Yes" : "No"}</p>
-                  {item.price_override != null && (
-                    <p><strong>Price override:</strong> {item.price_override}</p>
-                  )}
+                  {item.price_override != null && <p><strong>Price override:</strong> {item.price_override}</p>}
                 </div>
-                <button
-                  onClick={() => updateAvailability(item.id, !item.is_available)}
-                  className="rounded-lg bg-blue-700 px-3 py-2 text-white"
-                >
+                <button onClick={() => updateAvailability(item.id, !item.is_available)} className="rounded-lg bg-blue-700 px-3 py-2 text-white">
                   Mark {item.is_available ? "Unavailable" : "Available"}
                 </button>
               </div>
@@ -616,51 +632,20 @@ export default function ProviderDashboard() {
       {activeTab === "payouts" && (
         <section className="space-y-3">
           <h2 className="text-xl font-bold">Provider Payout History</h2>
-
           {payouts.length === 0 ? (
             <p>No payout records found.</p>
           ) : (
             payouts.map((item) => (
               <div key={item.id} className="space-y-3 rounded-xl border p-4">
-                <p>
-                  <strong>Amount:</strong>{" "}
-                  {money(item.amount, item.currency)}
-                </p>
-
-                <p>
-                  <strong>Payment method:</strong>{" "}
-                  {item.payout_method || "Not specified"}
-                </p>
-
-                <p>
-                  <strong>Status:</strong>{" "}
-                  <span className="capitalize">
-                    {item.status || "Not specified"}
-                  </span>
-                </p>
-
-                <p>
-                  <strong>Payout reference:</strong>{" "}
-                  {item.payout_reference || "Not yet provided"}
-                </p>
-
-                <p>
-                  <strong>Date requested:</strong>{" "}
-                  {formatDate(item.requested_at)}
-                </p>
-
-                <p>
-                  <strong>Date paid:</strong>{" "}
-                  {item.paid_at
-                    ? formatDate(item.paid_at)
-                    : "Not yet paid"}
-                </p>
-
+                <p><strong>Amount:</strong> {money(item.amount, item.currency)}</p>
+                <p><strong>Payment method:</strong> {item.payout_method || "Not specified"}</p>
+                <p><strong>Status:</strong> <span className="capitalize">{item.status || "Not specified"}</span></p>
+                <p><strong>Payout reference:</strong> {item.payout_reference || "Not yet provided"}</p>
+                <p><strong>Date requested:</strong> {formatDate(item.requested_at)}</p>
+                <p><strong>Date paid:</strong> {item.paid_at ? formatDate(item.paid_at) : "Not yet paid"}</p>
                 <div>
                   <strong>Admin notes:</strong>
-                  <p className="mt-1 whitespace-pre-wrap text-gray-600">
-                    {item.notes || "No additional notes."}
-                  </p>
+                  <p className="mt-1 whitespace-pre-wrap text-gray-600">{item.notes || "No additional notes."}</p>
                 </div>
               </div>
             ))
