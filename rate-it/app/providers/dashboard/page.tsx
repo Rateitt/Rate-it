@@ -10,7 +10,7 @@ const supabase = createClient(
 );
 
 type Item = {
-  id: string;
+  id: string | number;
   [key: string]: any;
 };
 
@@ -34,6 +34,7 @@ export default function ProviderDashboard() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
+  const [bookingError, setBookingError] = useState("");
 
   const [property, setProperty] = useState({
     title: "",
@@ -97,6 +98,12 @@ export default function ProviderDashboard() {
     return "property_id";
   }
 
+  function bookingTypeLabel(type: string) {
+    if (type === "car_rental") return "Car rental";
+    if (type === "airport_transfer") return "Airport transfer";
+    return "Property rental";
+  }
+
   function isPremiumActive(item: Item) {
     const status = String(
       item.premium_status || item.subscription_status || ""
@@ -129,6 +136,7 @@ export default function ProviderDashboard() {
   async function loadDashboard() {
     setLoading(true);
     setMessage("");
+    setBookingError("");
 
     try {
       const {
@@ -140,6 +148,7 @@ export default function ProviderDashboard() {
 
       if (!user) {
         setMessage("Please sign in to access your provider dashboard.");
+        setProvider(null);
         return;
       }
 
@@ -152,6 +161,7 @@ export default function ProviderDashboard() {
       if (profileError) throw profileError;
 
       if (!profile) {
+        setProvider(null);
         setMessage("Your provider profile could not be found.");
         return;
       }
@@ -183,24 +193,38 @@ export default function ProviderDashboard() {
       if (listingIds.length > 0) {
         const foreignKey = bookingForeignKey(type);
 
-        const { data: bookingData } = await supabase
+        const { data: bookingData, error: bookingLoadError } = await supabase
           .from(bookingTable(type))
           .select("*")
           .in(foreignKey, listingIds)
           .order("created_at", { ascending: false });
 
-        setBookings(bookingData || []);
+        if (bookingLoadError) {
+          setBookings([]);
+          setBookingError(
+            `Unable to load ${bookingTypeLabel(type).toLowerCase()} bookings: ${bookingLoadError.message}`
+          );
+        } else {
+          setBookings(bookingData || []);
+          setBookingError("");
+        }
       } else {
         setBookings([]);
+        setBookingError("");
       }
 
-      const { data: commissionData } = await supabase
+      const { data: commissionData, error: commissionError } = await supabase
         .from("commissions")
         .select("*")
         .eq("provider_id", profile.id)
         .order("created_at", { ascending: false });
 
-      setCommissions(commissionData || []);
+      if (commissionError) {
+        setCommissions([]);
+        setMessage(`Commission records could not be loaded: ${commissionError.message}`);
+      } else {
+        setCommissions(commissionData || []);
+      }
 
       const { data: payoutData, error: payoutError } = await supabase
         .from("provider_payouts")
@@ -213,11 +237,14 @@ export default function ProviderDashboard() {
       setPayouts(payoutData || []);
 
       if (type === "property_rental" && listingIds.length > 0) {
-        const { data: availabilityData } = await supabase
-          .from("property_availability")
-          .select("*")
-          .in("property_id", listingIds)
-          .order("available_date", { ascending: true });
+        const { data: availabilityData, error: availabilityError } =
+          await supabase
+            .from("property_availability")
+            .select("*")
+            .in("property_id", listingIds)
+            .order("available_date", { ascending: true });
+
+        if (availabilityError) throw availabilityError;
 
         setAvailability(availabilityData || []);
       } else {
@@ -319,7 +346,7 @@ export default function ProviderDashboard() {
     }
   }
 
-  async function updateBookingStatus(id: string, status: string) {
+  async function updateBookingStatus(id: string | number, status: string) {
     if (!provider) return;
 
     setMessage("");
@@ -339,7 +366,7 @@ export default function ProviderDashboard() {
     }
   }
 
-  async function updateAvailability(id: string, isAvailable: boolean) {
+  async function updateAvailability(id: string | number, isAvailable: boolean) {
     setMessage("");
 
     try {
@@ -416,18 +443,26 @@ export default function ProviderDashboard() {
           <h1 className="text-3xl font-bold">Provider Dashboard</h1>
           <p className="text-gray-600">{provider.business_name}</p>
         </div>
-        <button onClick={signOut} className="rounded-lg bg-gray-900 px-4 py-2 text-white">
+        <button
+          onClick={signOut}
+          className="rounded-lg bg-gray-900 px-4 py-2 text-white"
+        >
           Sign out
         </button>
       </div>
 
       <div className="rounded-xl border p-4">
         <p><strong>Business:</strong> {provider.business_name}</p>
-        <p><strong>Provider type:</strong> {provider.provider_type.replaceAll("_", " ")}</p>
+        <p>
+          <strong>Provider type:</strong>{" "}
+          {provider.provider_type.replaceAll("_", " ")}
+        </p>
         <p><strong>Email:</strong> {provider.email}</p>
         <p>
           <strong>Verification:</strong>{" "}
-          <span className="capitalize">{provider.verification_status || "pending"}</span>
+          <span className="capitalize">
+            {provider.verification_status || "pending"}
+          </span>
         </p>
       </div>
 
@@ -443,7 +478,9 @@ export default function ProviderDashboard() {
             key={tab}
             onClick={() => setActiveTab(tab)}
             className={`rounded-lg px-4 py-2 capitalize ${
-              activeTab === tab ? "bg-blue-700 text-white" : "bg-gray-100 text-gray-800"
+              activeTab === tab
+                ? "bg-blue-700 text-white"
+                : "bg-gray-100 text-gray-800"
             }`}
           >
             {tab}
@@ -478,7 +515,9 @@ export default function ProviderDashboard() {
               <div
                 key={item.id}
                 className={`rounded-xl border p-4 ${
-                  isPremiumActive(item) ? "border-yellow-500 bg-yellow-50" : ""
+                  isPremiumActive(item)
+                    ? "border-yellow-500 bg-yellow-50"
+                    : ""
                 }`}
               >
                 <div className="flex flex-wrap items-center justify-between gap-2">
@@ -492,7 +531,9 @@ export default function ProviderDashboard() {
                 <p className="text-sm text-gray-600">
                   Status: {item.status || "Not specified"}
                 </p>
-                <p className="break-all text-xs text-gray-400">Listing ID: {item.id}</p>
+                <p className="break-all text-xs text-gray-400">
+                  Listing ID: {item.id}
+                </p>
               </div>
             ))
           )}
@@ -557,7 +598,11 @@ export default function ProviderDashboard() {
               </>
             )}
 
-            <button type="submit" disabled={saving} className="w-full rounded-lg bg-blue-700 p-3 font-semibold text-white disabled:opacity-50">
+            <button
+              type="submit"
+              disabled={saving}
+              className="w-full rounded-lg bg-blue-700 p-3 font-semibold text-white disabled:opacity-50"
+            >
               {saving ? "Saving..." : "Submit Listing"}
             </button>
           </form>
@@ -566,8 +611,29 @@ export default function ProviderDashboard() {
 
       {activeTab === "bookings" && (
         <section className="space-y-3">
-          <h2 className="text-xl font-bold">Booking Management</h2>
-          {bookings.length === 0 ? (
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 className="text-xl font-bold">Booking Management</h2>
+              <p className="text-sm text-gray-600">
+                {bookingTypeLabel(provider.provider_type)} bookings
+              </p>
+            </div>
+            <button
+              onClick={loadDashboard}
+              className="rounded-lg border px-4 py-2 text-sm font-semibold"
+            >
+              Refresh bookings
+            </button>
+          </div>
+
+          {bookingError && (
+            <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-red-800">
+              <p className="font-semibold">Booking records could not be loaded.</p>
+              <p className="mt-1 text-sm">{bookingError}</p>
+            </div>
+          )}
+
+          {!bookingError && bookings.length === 0 ? (
             <p>No bookings found for your listings.</p>
           ) : (
             bookings.map((booking) => (
@@ -575,11 +641,32 @@ export default function ProviderDashboard() {
                 <p><strong>Booking:</strong> {booking.id}</p>
                 <p><strong>Status:</strong> {booking.status || "Pending"}</p>
                 <p><strong>Payment:</strong> {booking.payment_status || "Not specified"}</p>
-                <p><strong>Amount:</strong> {money(booking.total_price || booking.total_amount || booking.price, booking.currency)}</p>
+                <p>
+                  <strong>Amount:</strong>{" "}
+                  {money(
+                    booking.total_price || booking.total_amount || booking.price,
+                    booking.currency
+                  )}
+                </p>
                 <div className="flex flex-wrap gap-2">
-                  <button onClick={() => updateBookingStatus(booking.id, "confirmed")} className="rounded bg-green-700 px-3 py-2 text-white">Confirm</button>
-                  <button onClick={() => updateBookingStatus(booking.id, "cancelled")} className="rounded bg-red-700 px-3 py-2 text-white">Cancel</button>
-                  <button onClick={() => updateBookingStatus(booking.id, "completed")} className="rounded bg-gray-700 px-3 py-2 text-white">Complete</button>
+                  <button
+                    onClick={() => updateBookingStatus(booking.id, "confirmed")}
+                    className="rounded bg-green-700 px-3 py-2 text-white"
+                  >
+                    Confirm
+                  </button>
+                  <button
+                    onClick={() => updateBookingStatus(booking.id, "cancelled")}
+                    className="rounded bg-red-700 px-3 py-2 text-white"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={() => updateBookingStatus(booking.id, "completed")}
+                    className="rounded bg-gray-700 px-3 py-2 text-white"
+                  >
+                    Complete
+                  </button>
                 </div>
               </div>
             ))
@@ -596,13 +683,21 @@ export default function ProviderDashboard() {
             <p>No property availability records found yet.</p>
           ) : (
             availability.map((item) => (
-              <div key={item.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border p-4">
+              <div
+                key={item.id}
+                className="flex flex-wrap items-center justify-between gap-3 rounded-xl border p-4"
+              >
                 <div>
                   <p><strong>Date:</strong> {item.available_date}</p>
                   <p><strong>Available:</strong> {item.is_available ? "Yes" : "No"}</p>
-                  {item.price_override != null && <p><strong>Price override:</strong> {item.price_override}</p>}
+                  {item.price_override != null && (
+                    <p><strong>Price override:</strong> {item.price_override}</p>
+                  )}
                 </div>
-                <button onClick={() => updateAvailability(item.id, !item.is_available)} className="rounded-lg bg-blue-700 px-3 py-2 text-white">
+                <button
+                  onClick={() => updateAvailability(item.id, !item.is_available)}
+                  className="rounded-lg bg-blue-700 px-3 py-2 text-white"
+                >
                   Mark {item.is_available ? "Unavailable" : "Available"}
                 </button>
               </div>
@@ -645,7 +740,9 @@ export default function ProviderDashboard() {
                 <p><strong>Date paid:</strong> {item.paid_at ? formatDate(item.paid_at) : "Not yet paid"}</p>
                 <div>
                   <strong>Admin notes:</strong>
-                  <p className="mt-1 whitespace-pre-wrap text-gray-600">{item.notes || "No additional notes."}</p>
+                  <p className="mt-1 whitespace-pre-wrap text-gray-600">
+                    {item.notes || "No additional notes."}
+                  </p>
                 </div>
               </div>
             ))
