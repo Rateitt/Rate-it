@@ -10,10 +10,7 @@ const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!
 );
 
-function getValue(
-  item: RecordData,
-  keys: string[]
-): string {
+function getValue(item: RecordData, keys: string[]): string {
   for (const key of keys) {
     const value = item[key];
 
@@ -35,6 +32,38 @@ function getImage(item: RecordData): string {
     "main_image",
     "url",
   ]);
+}
+
+function isPremiumActive(property: RecordData): boolean {
+  const premiumStatus = getValue(property, [
+    "premium_status",
+    "subscription_status",
+  ]).toLowerCase();
+
+  const isPremium =
+    property.is_premium === true ||
+    property.premium === true ||
+    premiumStatus === "active" ||
+    premiumStatus === "premium" ||
+    premiumStatus === "approved";
+
+  if (!isPremium) return false;
+
+  const expiry = getValue(property, [
+    "premium_expires_at",
+    "subscription_expires_at",
+    "featured_until",
+  ]);
+
+  if (expiry) {
+    const expiryTime = Date.parse(expiry);
+
+    if (Number.isNaN(expiryTime) || expiryTime <= Date.now()) {
+      return false;
+    }
+  }
+
+  return true;
 }
 
 export default function PropertiesPage() {
@@ -60,6 +89,10 @@ export default function PropertiesPage() {
           throw propertyResult.error;
         }
 
+        if (photoResult.error) {
+          console.error("Property photos loading error:", photoResult.error);
+        }
+
         setProperties(propertyResult.data || []);
         setPhotos(photoResult.data || []);
       } catch (err) {
@@ -74,38 +107,45 @@ export default function PropertiesPage() {
   }, []);
 
   const filteredProperties = useMemo(() => {
-    return properties.filter((property) => {
-      const name = getValue(property, [
-        "property_name",
-        "name",
-        "title",
-        "property_title",
-      ]);
+    return properties
+      .filter((property) => {
+        const name = getValue(property, [
+          "property_name",
+          "name",
+          "title",
+          "property_title",
+        ]);
 
-      const location = getValue(property, [
-        "location",
-        "city",
-        "address",
-        "country",
-      ]);
+        const location = getValue(property, [
+          "location",
+          "city",
+          "address",
+          "country",
+        ]);
 
-      const propertyType = getValue(property, [
-        "property_type",
-        "type",
-        "category",
-      ]);
+        const propertyType = getValue(property, [
+          "property_type",
+          "type",
+          "category",
+        ]);
 
-      const matchesSearch =
-        `${name} ${location} ${propertyType}`
-          .toLowerCase()
-          .includes(search.toLowerCase());
+        const matchesSearch =
+          `${name} ${location} ${propertyType}`
+            .toLowerCase()
+            .includes(search.toLowerCase());
 
-      const matchesType =
-        type === "All" ||
-        propertyType.toLowerCase().includes(type.toLowerCase());
+        const matchesType =
+          type === "All" ||
+          propertyType.toLowerCase().includes(type.toLowerCase());
 
-      return matchesSearch && matchesType;
-    });
+        return matchesSearch && matchesType;
+      })
+      .sort((a, b) => {
+        return (
+          Number(isPremiumActive(b)) -
+          Number(isPremiumActive(a))
+        );
+      });
   }, [properties, search, type]);
 
   function propertyImage(property: RecordData): string {
@@ -130,12 +170,12 @@ export default function PropertiesPage() {
   return (
     <main className="min-h-screen bg-gray-50 text-gray-900">
       <header className="bg-white border-b">
-        <div className="max-w-7xl mx-auto px-5 py-5 flex justify-between items-center">
+        <div className="max-w-7xl mx-auto px-5 py-5 flex flex-wrap justify-between items-center gap-4">
           <a href="/" className="text-2xl font-bold text-blue-700">
             Rate-It
           </a>
 
-          <nav className="flex gap-5 text-sm font-medium">
+          <nav className="flex flex-wrap gap-5 text-sm font-medium">
             <a href="/hotels" className="hover:text-blue-700">
               Hotels
             </a>
@@ -191,6 +231,7 @@ export default function PropertiesPage() {
             <h2 className="text-2xl font-bold">
               Explore properties
             </h2>
+
             <p className="text-gray-500 mt-2">
               Find a place that feels like home.
             </p>
@@ -220,6 +261,7 @@ export default function PropertiesPage() {
         {!loading && error && (
           <div className="bg-red-50 text-red-700 p-5 rounded-xl">
             {error}
+
             <button
               onClick={() => window.location.reload()}
               className="block mt-3 underline font-semibold"
@@ -234,6 +276,7 @@ export default function PropertiesPage() {
             <h3 className="text-xl font-bold mb-3">
               No properties found
             </h3>
+
             <p className="text-gray-500">
               Try another destination or check back later.
             </p>
@@ -276,11 +319,16 @@ export default function PropertiesPage() {
                 getValue(property, ["currency"]) || "UGX";
 
               const image = propertyImage(property);
+              const premium = isPremiumActive(property);
 
               return (
                 <article
                   key={id || index}
-                  className="bg-white rounded-xl overflow-hidden border shadow-sm hover:shadow-lg transition"
+                  className={`bg-white rounded-xl overflow-hidden shadow-sm hover:shadow-lg transition border-2 ${
+                    premium
+                      ? "border-yellow-400"
+                      : "border-gray-200"
+                  }`}
                 >
                   <div className="h-56 bg-gray-200 relative">
                     {image ? (
@@ -300,6 +348,12 @@ export default function PropertiesPage() {
                   </div>
 
                   <div className="p-5">
+                    {premium && (
+                      <span className="inline-block mb-3 rounded-full bg-yellow-400 px-4 py-1 text-xs font-extrabold text-yellow-950">
+                        ★ PREMIUM
+                      </span>
+                    )}
+
                     <h3 className="text-xl font-bold mb-2">
                       {name}
                     </h3>
@@ -319,6 +373,7 @@ export default function PropertiesPage() {
                             <p className="font-bold text-blue-800">
                               {currency} {Number(price).toLocaleString()}
                             </p>
+
                             <span className="text-xs text-gray-500">
                               Price listed
                             </span>
@@ -353,9 +408,11 @@ export default function PropertiesPage() {
 
       <footer className="bg-blue-950 text-white py-8 text-center mt-10">
         <p className="font-bold text-xl mb-2">RATE-IT</p>
+
         <p className="text-blue-200 text-sm">
           Discover. Compare. Stay.
         </p>
+
         <p className="text-blue-300 text-xs mt-4">
           © {new Date().getFullYear()} Rate-It. All rights reserved.
         </p>
