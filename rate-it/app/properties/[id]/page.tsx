@@ -24,6 +24,13 @@ type Property = {
   max_guests?: number;
   amenities?: string[] | string;
   status?: string;
+  is_premium?: boolean;
+  premium?: boolean;
+  premium_status?: string;
+  subscription_status?: string;
+  premium_expires_at?: string;
+  subscription_expires_at?: string;
+  featured_until?: string;
 };
 
 type PropertyPhoto = {
@@ -32,6 +39,34 @@ type PropertyPhoto = {
   photo_url?: string;
   url?: string;
 };
+
+function isPremiumActive(property: Property): boolean {
+  const status = (
+    property.premium_status ||
+    property.subscription_status ||
+    ""
+  ).toLowerCase();
+
+  const markedPremium =
+    property.is_premium === true ||
+    property.premium === true ||
+    status === "active" ||
+    status === "premium" ||
+    status === "approved";
+
+  if (!markedPremium) return false;
+
+  const expiry =
+    property.premium_expires_at ||
+    property.subscription_expires_at ||
+    property.featured_until;
+
+  if (expiry && new Date(expiry).getTime() <= Date.now()) {
+    return false;
+  }
+
+  return true;
+}
 
 export default function PropertyDetailsPage() {
   const params = useParams();
@@ -60,14 +95,14 @@ export default function PropertyDetailsPage() {
         return;
       }
 
-      setProperty(data);
+      setProperty(data as Property);
 
       const { data: photoData } = await supabase
         .from("property_photos")
         .select("*")
         .eq("property_id", propertyId);
 
-      setPhotos(photoData || []);
+      setPhotos((photoData || []) as PropertyPhoto[]);
       setLoading(false);
     }
 
@@ -95,6 +130,7 @@ export default function PropertyDetailsPage() {
   );
 
   const currency = property?.currency || "UGX";
+  const premiumActive = property ? isPremiumActive(property) : false;
 
   if (loading) {
     return (
@@ -130,7 +166,7 @@ export default function PropertyDetailsPage() {
   return (
     <main className="min-h-screen bg-gray-50">
       <header className="bg-white border-b px-5 py-5">
-        <div className="max-w-6xl mx-auto flex justify-between">
+        <div className="max-w-6xl mx-auto flex justify-between items-center">
           <a href="/" className="text-2xl font-bold text-blue-700">
             Rate-It
           </a>
@@ -141,7 +177,16 @@ export default function PropertyDetailsPage() {
       </header>
 
       <section className="max-w-6xl mx-auto px-5 py-10">
-        <h1 className="text-3xl font-bold mb-3">{propertyName}</h1>
+        <div className="flex flex-wrap items-center gap-3 mb-3">
+          <h1 className="text-3xl font-bold">{propertyName}</h1>
+
+          {premiumActive && (
+            <span className="inline-flex items-center rounded-full bg-amber-100 text-amber-800 border border-amber-300 px-3 py-1 text-sm font-bold">
+              ★ PREMIUM
+            </span>
+          )}
+        </div>
+
         <p className="text-gray-600 mb-7">{location}</p>
 
         {photos.length > 0 ? (
@@ -183,18 +228,21 @@ export default function PropertyDetailsPage() {
                   {property.property_type || "Not specified"}
                 </p>
               </div>
+
               <div>
                 <p className="text-gray-500 text-sm">Bedrooms</p>
                 <p className="font-semibold">
                   {property.bedrooms ?? "Not specified"}
                 </p>
               </div>
+
               <div>
                 <p className="text-gray-500 text-sm">Bathrooms</p>
                 <p className="font-semibold">
                   {property.bathrooms ?? "Not specified"}
                 </p>
               </div>
+
               <div>
                 <p className="text-gray-500 text-sm">Maximum guests</p>
                 <p className="font-semibold">
@@ -228,7 +276,9 @@ export default function PropertyDetailsPage() {
 
             <button
               onClick={() =>
-                router.push(`/properties/${encodeURIComponent(propertyId)}/book`)
+                router.push(
+                  `/properties/${encodeURIComponent(propertyId)}/book`
+                )
               }
               className="w-full bg-blue-700 hover:bg-blue-800 text-white font-semibold py-3 rounded-lg"
             >
