@@ -25,7 +25,42 @@ type Transfer = {
   seats?: number;
   description?: string;
   status?: string;
+  [key: string]: unknown;
 };
+
+function getText(value: unknown): string {
+  return typeof value === "string" ? value.toLowerCase() : "";
+}
+
+function isPremiumActive(service: Transfer): boolean {
+  const premiumStatus =
+    getText(service.premium_status) ||
+    getText(service.subscription_status);
+
+  const isPremium =
+    service.is_premium === true ||
+    service.premium === true ||
+    premiumStatus === "active" ||
+    premiumStatus === "premium" ||
+    premiumStatus === "approved";
+
+  if (!isPremium) return false;
+
+  const expiry =
+    service.premium_expires_at ||
+    service.subscription_expires_at ||
+    service.featured_until;
+
+  if (expiry) {
+    const expiryTime = Date.parse(String(expiry));
+
+    if (Number.isNaN(expiryTime) || expiryTime <= Date.now()) {
+      return false;
+    }
+  }
+
+  return true;
+}
 
 export default function TransfersPage() {
   const [services, setServices] = useState<Transfer[]>([]);
@@ -35,46 +70,58 @@ export default function TransfersPage() {
 
   useEffect(() => {
     async function loadTransfers() {
-      const { data, error } = await supabase
-        .from("transfer_services")
-        .select("*")
-        .limit(100);
+      try {
+        const { data, error } = await supabase
+          .from("transfer_services")
+          .select("*")
+          .limit(100);
 
-      if (error) {
-        setError("Unable to load airport transfer services.");
-      } else {
+        if (error) throw error;
+
         setServices((data || []) as Transfer[]);
+      } catch {
+        setError("Unable to load airport transfer services.");
+      } finally {
+        setLoading(false);
       }
-
-      setLoading(false);
     }
 
     loadTransfers();
   }, []);
 
-  const filteredServices = services.filter((service) => {
-    const details = [
-      service.name,
-      service.service_name,
-      service.vehicle_type,
-      service.airport,
-      service.pickup_location,
-      service.destination,
-      service.city,
-      service.country,
-    ].join(" ").toLowerCase();
+  const filteredServices = services
+    .filter((service) => {
+      const details = [
+        service.name,
+        service.service_name,
+        service.vehicle_type,
+        service.airport,
+        service.pickup_location,
+        service.destination,
+        service.city,
+        service.country,
+      ]
+        .join(" ")
+        .toLowerCase();
 
-    return details.includes(search.toLowerCase());
-  });
+      return details.includes(search.toLowerCase());
+    })
+    .sort((a, b) => {
+      return (
+        Number(isPremiumActive(b)) -
+        Number(isPremiumActive(a))
+      );
+    });
 
   return (
     <main className="min-h-screen bg-gray-50">
       <header className="bg-white border-b px-5 py-5">
-        <div className="max-w-7xl mx-auto flex justify-between items-center">
+        <div className="max-w-7xl mx-auto flex flex-wrap justify-between items-center gap-4">
           <a href="/" className="text-2xl font-bold text-blue-700">
             Rate-It
           </a>
-          <nav className="flex gap-4 text-sm">
+
+          <nav className="flex flex-wrap gap-4 text-sm">
             <a href="/hotels">Hotels</a>
             <a href="/properties">Properties</a>
             <a href="/cars">Cars</a>
@@ -111,15 +158,14 @@ export default function TransfersPage() {
 
         {loading && <p>Loading transfer services...</p>}
 
-        {error && (
-          <p className="text-red-600">{error}</p>
-        )}
+        {error && <p className="text-red-600">{error}</p>}
 
         {!loading && !error && filteredServices.length === 0 && (
           <div className="bg-white rounded-xl p-10 text-center border">
             <h3 className="text-xl font-bold mb-2">
               No transfer services available yet
             </h3>
+
             <p className="text-gray-500">
               New airport transfer providers will appear here.
             </p>
@@ -127,62 +173,95 @@ export default function TransfersPage() {
         )}
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredServices.map((service) => (
-            <article
-              key={service.id}
-              className="bg-white rounded-xl border overflow-hidden shadow-sm"
-            >
-              <div className="h-44 bg-gray-200 flex items-center justify-center">
-                <span className="text-gray-500">
-                  Transfer vehicle
-                </span>
-              </div>
+          {filteredServices.map((service) => {
+            const premium = isPremiumActive(service);
 
-              <div className="p-5">
-                <h3 className="text-xl font-bold">
-                  {service.name ||
-                    service.service_name ||
-                    service.vehicle_type ||
-                    "Airport transfer"}
-                </h3>
-
-                <p className="text-gray-500 mt-3">
-                  {service.airport || service.pickup_location || "Pickup location available on request"}
-                </p>
-
-                <p className="text-gray-500 text-sm mt-2">
-                  Destination: {service.destination || "Contact provider"}
-                </p>
-
-                {service.seats && (
-                  <p className="text-sm text-gray-600 mt-2">
-                    {service.seats} passengers
-                  </p>
-                )}
-
-                <p className="text-gray-600 text-sm mt-3">
-                  {service.description}
-                </p>
-
-                <div className="flex justify-between items-center mt-5">
-                  <div>
-                    <p className="text-blue-800 font-bold">
-                      {service.currency || "UGX"}{" "}
-                      {(service.price ?? service.price_per_trip)?.toLocaleString() || "Contact"}
-                    </p>
-                    <p className="text-xs text-gray-500">Per trip</p>
-                  </div>
-
-                  <a
-                    href={`/transfers/book?service=${encodeURIComponent(String(service.id))}`}
-                    className="bg-blue-700 text-white rounded-lg px-5 py-3 font-semibold"
-                  >
-                    Book transfer
-                  </a>
+            return (
+              <article
+                key={service.id}
+                className={`bg-white rounded-xl overflow-hidden shadow-sm border-2 ${
+                  premium
+                    ? "border-yellow-400"
+                    : "border-gray-200"
+                }`}
+              >
+                <div className="h-44 bg-gray-200 flex items-center justify-center">
+                  <span className="text-gray-500">
+                    Transfer vehicle
+                  </span>
                 </div>
-              </div>
-            </article>
-          ))}
+
+                <div className="p-5">
+                  {premium && (
+                    <span className="inline-block mb-3 rounded-full bg-yellow-400 px-4 py-1 text-xs font-extrabold text-yellow-950">
+                      ★ PREMIUM
+                    </span>
+                  )}
+
+                  <h3 className="text-xl font-bold">
+                    {service.name ||
+                      service.service_name ||
+                      service.vehicle_type ||
+                      "Airport transfer"}
+                  </h3>
+
+                  <p className="text-gray-500 mt-3">
+                    {service.airport ||
+                      service.pickup_location ||
+                      "Pickup location available on request"}
+                  </p>
+
+                  <p className="text-gray-500 text-sm mt-2">
+                    Destination: {service.destination || "Contact provider"}
+                  </p>
+
+                  {(service.city || service.country) && (
+                    <p className="text-gray-500 text-sm mt-2">
+                      {[service.city, service.country]
+                        .filter(Boolean)
+                        .join(", ")}
+                    </p>
+                  )}
+
+                  {service.seats && (
+                    <p className="text-sm text-gray-600 mt-2">
+                      {service.seats} passengers
+                    </p>
+                  )}
+
+                  {service.description && (
+                    <p className="text-gray-600 text-sm mt-3">
+                      {service.description}
+                    </p>
+                  )}
+
+                  <div className="flex flex-wrap justify-between items-center gap-3 mt-5">
+                    <div>
+                      <p className="text-blue-800 font-bold">
+                        {service.currency || "UGX"}{" "}
+                        {typeof (service.price ?? service.price_per_trip) === "number"
+                          ? (service.price ?? service.price_per_trip)!.toLocaleString()
+                          : "Contact"}
+                      </p>
+
+                      <p className="text-xs text-gray-500">
+                        Per trip
+                      </p>
+                    </div>
+
+                    <a
+                      href={`/transfers/book?service=${encodeURIComponent(
+                        String(service.id)
+                      )}`}
+                      className="bg-blue-700 text-white rounded-lg px-5 py-3 font-semibold"
+                    >
+                      Book transfer
+                    </a>
+                  </div>
+                </div>
+              </article>
+            );
+          })}
         </div>
       </section>
     </main>
