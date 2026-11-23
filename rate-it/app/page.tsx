@@ -160,7 +160,7 @@ export default function HomePage() {
 
             <button
               type="button"
-              onClick={() => alert("Rate-It support will be available soon.")}
+              onClick={() => router.push("/contact")}
               style={{
                 border: "none",
                 background: "transparent",
@@ -329,7 +329,7 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* FOUR MARKETPLACE SERVICES */}
+      {/* MARKETPLACE SERVICES */}
       <section
         style={{
           maxWidth: "1200px",
@@ -706,18 +706,42 @@ export default function HomePage() {
             © 2026 Rate-It. Discover. Compare. Stay.
           </p>
 
-          <button
-            type="button"
-            onClick={() => router.push("/hotel/login")}
+          <div
             style={{
-              border: "none",
-              background: "transparent",
-              color: "#374151",
-              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              gap: "20px",
+              flexWrap: "wrap",
             }}
           >
-            Hotel Login
-          </button>
+            <button
+              type="button"
+              onClick={() => router.push("/contact")}
+              style={{
+                border: "none",
+                background: "transparent",
+                color: "#2563eb",
+                cursor: "pointer",
+                fontWeight: "600",
+                fontSize: "15px",
+              }}
+            >
+              Contact Us
+            </button>
+
+            <button
+              type="button"
+              onClick={() => router.push("/hotel/login")}
+              style={{
+                border: "none",
+                background: "transparent",
+                color: "#374151",
+                cursor: "pointer",
+              }}
+            >
+              Hotel Login
+            </button>
+          </div>
         </div>
       </footer>
     </main>
