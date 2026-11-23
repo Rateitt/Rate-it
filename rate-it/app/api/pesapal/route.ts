@@ -16,6 +16,7 @@ const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 const IPN_ID = process.env.PESAPAL_IPN_ID;
 
 const COMMISSION_RATE = 10;
+const PROVIDER_SHARE_RATE = 90;
 
 const BOOKING_TABLES: Record<string, string[]> = {
   car: ["vehicle_bookings"],
@@ -174,7 +175,7 @@ async function recordSuccessfulPayment(
   const { data: existingPayment, error: existingPaymentError } =
     await supabase
       .from("payments")
-      .select("id, booking_id, booking_type, customer_user_id")
+      .select("id, booking_id, booking_type, customer_user_id, status")
       .eq("provider_transaction_id", trackingId)
       .maybeSingle();
 
@@ -195,6 +196,20 @@ async function recordSuccessfulPayment(
     }
 
     paymentId = String(existingPayment.id);
+
+    if (existingPayment.status !== "paid") {
+      const { error: updatePaymentError } = await supabase
+        .from("payments")
+        .update({
+          status: "paid",
+          paid_at: new Date().toISOString(),
+        })
+        .eq("id", paymentId);
+
+      if (updatePaymentError) {
+        throw new Error("Could not update the existing payment record.");
+      }
+    }
   } else {
     const { data: newPayment, error: paymentError } = await supabase
       .from("payments")
@@ -222,6 +237,14 @@ async function recordSuccessfulPayment(
     paymentId = String(newPayment.id);
   }
 
+  const commissionAmount = Number(
+    ((paidAmount * COMMISSION_RATE) / 100).toFixed(2)
+  );
+
+  const providerAmount = Number(
+    ((paidAmount * PROVIDER_SHARE_RATE) / 100).toFixed(2)
+  );
+
   const { data: existingCommission, error: commissionCheckError } =
     await supabase
       .from("commissions")
@@ -234,10 +257,6 @@ async function recordSuccessfulPayment(
   }
 
   if (!existingCommission) {
-    const commissionAmount = Number(
-      ((paidAmount * COMMISSION_RATE) / 100).toFixed(2)
-    );
-
     const { error: commissionError } = await supabase
       .from("commissions")
       .insert({
@@ -255,6 +274,43 @@ async function recordSuccessfulPayment(
     if (commissionError) {
       throw new Error(
         commissionError.message || "Could not save the commission."
+      );
+    }
+  }
+
+  // Create one pending payout record per successful payment.
+  // The unique payment_id index prevents duplicate payout records.
+  const { data: existingPayout, error: payoutCheckError } =
+    await supabase
+      .from("provider_payouts")
+      .select("id")
+      .eq("payment_id", paymentId)
+      .maybeSingle();
+
+  if (payoutCheckError) {
+    throw new Error("Could not check the existing provider payout.");
+  }
+
+  if (!existingPayout) {
+    const { error: payoutError } = await supabase
+      .from("provider_payouts")
+      .insert({
+        provider_id: providerId,
+        payment_id: paymentId,
+        booking_type: service,
+        booking_id: bookingId,
+        amount: providerAmount,
+        currency,
+        payout_method: "awaiting_setup",
+        payout_reference: trackingId,
+        status: "pending",
+        requested_at: new Date().toISOString(),
+        notes: "90% provider share. Awaiting automated payout integration.",
+      });
+
+    if (payoutError) {
+      throw new Error(
+        payoutError.message || "Could not create the provider payout record."
       );
     }
   }
@@ -373,7 +429,6 @@ async function verifyPremiumPayment(
   }
 
   if (paymentStatus === "paid") {
-    // Repeated successful IPNs must not restart an already active subscription.
     if (subscription.status !== "active") {
       const startsAt = new Date();
       const expiresAt = new Date(startsAt);
@@ -423,7 +478,6 @@ async function verifyPayment(
   trackingId: string,
   merchantReference: string
 ) {
-  // Premium payments use a separate verification and activation process.
   if (merchantReference.startsWith("RI-PREMIUM-")) {
     return verifyPremiumPayment(trackingId, merchantReference);
   }
