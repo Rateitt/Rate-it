@@ -698,6 +698,10 @@ export default function HomePage() {
               Privacy Policy
             </button>
 
+            <button onClick={() => router.push("/terms")} style={footerButton}>
+              Terms and Conditions
+            </button>
+
             <button onClick={() => router.push("/contact")} style={footerButton}>
               Contact Us
             </button>
