@@ -62,7 +62,6 @@ const services = [
 ];
 
 const heroSlides = [
-  // UGANDA - 4 PHOTOGRAPHS
   {
     image: "https://images.unsplash.com/photo-1516426122078-c23e76319801?w=2000&q=85",
     location: "Explore Uganda",
@@ -83,8 +82,6 @@ const heroSlides = [
     location: "Find your next Ugandan destination",
     category: "Uganda 🇺🇬",
   },
-
-  // KENYA - 4 PHOTOGRAPHS
   {
     image: "https://images.unsplash.com/photo-1516026672322-bc52d61a55d5?w=2000&q=85",
     location: "Discover beautiful Kenya",
@@ -105,8 +102,6 @@ const heroSlides = [
     location: "Plan your next Kenyan escape",
     category: "Kenya 🇰🇪",
   },
-
-  // TANZANIA AND ZANZIBAR - 4 PHOTOGRAPHS
   {
     image: "https://images.unsplash.com/photo-1519046904884-53103b34b206?w=2000&q=85",
     location: "Discover Zanzibar's tropical beaches",
@@ -127,8 +122,6 @@ const heroSlides = [
     location: "Discover Tanzania's natural beauty",
     category: "Tanzania 🇹🇿",
   },
-
-  // RWANDA - 4 PHOTOGRAPHS
   {
     image: "https://images.unsplash.com/photo-1445019980597-93fa8acb246c?w=2000&q=85",
     location: "Discover beautiful Rwanda",
@@ -149,8 +142,6 @@ const heroSlides = [
     location: "Plan your Rwanda getaway",
     category: "Rwanda 🇷🇼",
   },
-
-  // RATE-IT SERVICES - 4 PHOTOGRAPHS
   {
     image: "https://images.unsplash.com/photo-1542314831-068cd1dbfeeb?w=2000&q=85",
     location: "Find hotels and compare prices",
@@ -240,6 +231,10 @@ export default function HomePage() {
               flexWrap: "wrap",
             }}
           >
+            <button onClick={() => router.push("/about")} style={navButton}>
+              About
+            </button>
+
             <button
               onClick={() => router.push("/login")}
               style={navButton}
@@ -300,7 +295,6 @@ export default function HomePage() {
           />
         ))}
 
-        {/* DARK OVERLAY */}
         <div
           style={{
             position: "absolute",
@@ -311,7 +305,6 @@ export default function HomePage() {
           }}
         />
 
-        {/* HERO CONTENT */}
         <div
           style={{
             maxWidth: "1200px",
@@ -697,6 +690,10 @@ export default function HomePage() {
           </p>
 
           <div style={{ display: "flex", alignItems: "center", gap: "20px", flexWrap: "wrap" }}>
+            <button onClick={() => router.push("/about")} style={footerButton}>
+              About
+            </button>
+
             <button onClick={() => router.push("/contact")} style={footerButton}>
               Contact Us
             </button>
