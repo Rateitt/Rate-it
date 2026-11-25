@@ -694,6 +694,10 @@ export default function HomePage() {
               About
             </button>
 
+            <button onClick={() => router.push("/privacy")} style={footerButton}>
+              Privacy Policy
+            </button>
+
             <button onClick={() => router.push("/contact")} style={footerButton}>
               Contact Us
             </button>
