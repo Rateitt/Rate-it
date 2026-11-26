@@ -25,33 +25,35 @@ export default function AdminLoginPage() {
           password,
         });
 
-      if (loginError) {
+      if (loginError || !data.user) {
+        setError(loginError?.message || "Login failed. Please try again.");
         setLoading(false);
-        setError(loginError.message);
         return;
       }
 
-      if (!data.user) {
+      // Verify administrator privileges.
+      const adminRole = data.user.app_metadata?.role;
+
+      if (adminRole !== "admin") {
+        await supabase.auth.signOut();
+        setError("Access denied. This account is not an administrator.");
         setLoading(false);
-        setError("Login failed. Please try again.");
         return;
       }
 
-      /*
-       * We will add the real admin authorization check
-       * before allowing access to the admin dashboard.
-       */
-      router.push("/admin/dashboard");
+      // Redirect to the existing Admin Dashboard.
+      router.replace("/admin/login/dashboard");
+
     } catch (err) {
       console.error("ADMIN LOGIN ERROR:", err);
 
-      setLoading(false);
+      setError(
+        err instanceof Error
+          ? `Connection error: ${err.message}`
+          : "Unable to connect. Please try again."
+      );
 
-      if (err instanceof Error) {
-        setError(`Connection error: ${err.message}`);
-      } else {
-        setError("Unable to connect. Please try again.");
-      }
+      setLoading(false);
     }
   }
 
@@ -94,33 +96,16 @@ export default function AdminLoginPage() {
           Rate-It
         </button>
 
-        <h1
-          style={{
-            margin: "0 0 10px",
-            fontSize: "30px",
-            color: "#111827",
-          }}
-        >
+        <h1 style={{ margin: "0 0 10px", fontSize: "30px", color: "#111827" }}>
           Admin Login
         </h1>
 
-        <p
-          style={{
-            margin: "0 0 25px",
-            color: "#6b7280",
-          }}
-        >
+        <p style={{ margin: "0 0 25px", color: "#6b7280" }}>
           Sign in to manage the Rate-It platform.
         </p>
 
         <form onSubmit={handleLogin}>
-          <label
-            style={{
-              display: "block",
-              marginBottom: "7px",
-              fontWeight: "600",
-            }}
-          >
+          <label style={{ display: "block", marginBottom: "7px", fontWeight: "600" }}>
             Admin email
           </label>
 
@@ -128,7 +113,7 @@ export default function AdminLoginPage() {
             type="email"
             value={email}
             onChange={(event) => setEmail(event.target.value)}
-            placeholder="admin@example.com"
+            placeholder="rateithelpdesk@gmail.com"
             autoComplete="email"
             required
             style={{
@@ -142,13 +127,7 @@ export default function AdminLoginPage() {
             }}
           />
 
-          <label
-            style={{
-              display: "block",
-              marginBottom: "7px",
-              fontWeight: "600",
-            }}
-          >
+          <label style={{ display: "block", marginBottom: "7px", fontWeight: "600" }}>
             Password
           </label>
 
