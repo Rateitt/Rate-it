@@ -61,6 +61,33 @@ const services = [
   },
 ];
 
+const providerOptions = [
+  {
+    title: "Hotel Login",
+    description: "Manage your hotel, rooms, prices and bookings.",
+    icon: "🏨",
+    path: "/hotel/login",
+  },
+  {
+    title: "Car Rental Login",
+    description: "Manage your vehicles and rental bookings.",
+    icon: "🚗",
+    path: "/providers/dashboard/login",
+  },
+  {
+    title: "Property Rental Login",
+    description: "Manage your properties and reservations.",
+    icon: "🏡",
+    path: "/providers/dashboard/login",
+  },
+  {
+    title: "Airport Transfer Login",
+    description: "Manage your transfer services and bookings.",
+    icon: "✈️",
+    path: "/providers/dashboard/login",
+  },
+];
+
 const heroSlides = [
   {
     image: "https://images.unsplash.com/photo-1516426122078-c23e76319801?w=2000&q=85",
@@ -235,10 +262,7 @@ export default function HomePage() {
               About
             </button>
 
-            <button
-              onClick={() => router.push("/login")}
-              style={navButton}
-            >
+            <button onClick={() => router.push("/login")} style={navButton}>
               Sign in
             </button>
 
@@ -616,6 +640,138 @@ export default function HomePage() {
         </div>
       </section>
 
+      {/* PROVIDER LOGIN SECTION */}
+      <section
+        id="provider-login"
+        style={{
+          background: "#f8fafc",
+          padding: "65px 24px",
+          borderTop: "1px solid #e5e7eb",
+          borderBottom: "1px solid #e5e7eb",
+        }}
+      >
+        <div style={{ maxWidth: "1200px", margin: "0 auto" }}>
+          <p style={eyebrowStyle}>Rate-It Provider Access</p>
+
+          <h2 style={headingStyle}>Provider Login</h2>
+
+          <p style={{ ...paragraphStyle, marginBottom: "30px" }}>
+            Already registered with Rate-It? Choose your business category
+            to access your provider account.
+          </p>
+
+          <div style={gridStyle}>
+            {providerOptions.map((provider) => (
+              <div
+                key={provider.title}
+                style={{
+                  ...serviceCard,
+                  display: "flex",
+                  flexDirection: "column",
+                }}
+              >
+                <span style={{ fontSize: "40px", marginBottom: "15px" }}>
+                  {provider.icon}
+                </span>
+
+                <h3
+                  style={{
+                    fontSize: "21px",
+                    color: "#111827",
+                    margin: "0 0 10px",
+                  }}
+                >
+                  {provider.title}
+                </h3>
+
+                <p style={{ ...paragraphStyle, flex: 1 }}>
+                  {provider.description}
+                </p>
+
+                <button
+                  type="button"
+                  onClick={() => router.push(provider.path)}
+                  style={{
+                    ...primaryButton,
+                    marginTop: "20px",
+                    width: "100%",
+                  }}
+                >
+                  {provider.title}
+                </button>
+              </div>
+            ))}
+          </div>
+
+          <div
+            style={{
+              background: "#ffffff",
+              border: "1px solid #dbeafe",
+              borderRadius: "14px",
+              padding: "25px",
+              marginTop: "30px",
+              textAlign: "center",
+            }}
+          >
+            <h3
+              style={{
+                color: "#111827",
+                fontSize: "22px",
+                margin: "0 0 10px",
+              }}
+            >
+              New to Rate-It?
+            </h3>
+
+            <p style={{ ...paragraphStyle, marginBottom: "20px" }}>
+              Register your hotel or join as a car rental, property rental
+              or airport transfer provider.
+            </p>
+
+            <div
+              style={{
+                display: "flex",
+                flexWrap: "wrap",
+                justifyContent: "center",
+                gap: "12px",
+              }}
+            >
+              <button
+                type="button"
+                onClick={() => router.push("/hotel/signup")}
+                style={primaryButton}
+              >
+                Register a Hotel
+              </button>
+
+              <button
+                type="button"
+                onClick={() => router.push("/providers/dashboard/signup")}
+                style={{
+                  ...primaryButton,
+                  background: "#ffffff",
+                  color: "#111827",
+                  border: "1px solid #111827",
+                }}
+              >
+                Register as a Provider
+              </button>
+            </div>
+
+            <p
+              style={{
+                color: "#15803d",
+                fontWeight: "700",
+                fontSize: "14px",
+                marginTop: "18px",
+              }}
+            >
+              Provider listings are FREE.
+            </p>
+          </div>
+        </div>
+      </section>
+
       {/* FREE PROVIDER SECTION */}
       <section
         id="provider"
@@ -647,22 +803,23 @@ export default function HomePage() {
             </p>
           </div>
 
-          <button
-            type="button"
-            onClick={() => router.push("/hotel/signup")}
-            style={{
-              padding: "13px 22px",
-              border: "none",
-              borderRadius: "8px",
-              background: "#ffffff",
-              color: "#111827",
-              fontWeight: "700",
-              fontSize: "15px",
-              cursor: "pointer",
-            }}
-          >
-            List your hotel
-          </button>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "12px" }}>
+            <button
+              type="button"
+              onClick={() => router.push("/hotel/signup")}
+              style={lightButton}
+            >
+              List your hotel
+            </button>
+
+            <button
+              type="button"
+              onClick={() => router.push("/providers/dashboard/signup")}
+              style={lightButton}
+            >
+              Register as a Provider
+            </button>
+          </div>
         </div>
       </section>
 
@@ -709,6 +866,20 @@ export default function HomePage() {
             <button onClick={() => router.push("/hotel/login")} style={footerButton}>
               Hotel Login
             </button>
+
+            <button
+              onClick={() => router.push("/providers/dashboard/login")}
+              style={footerButton}
+            >
+              Provider Login
+            </button>
+
+            <button
+              onClick={() => router.push("/providers/dashboard/signup")}
+              style={footerButton}
+            >
+              Provider Registration
+            </button>
           </div>
         </div>
       </footer>
@@ -742,6 +913,17 @@ const primaryButton = {
   color: "#ffffff",
   fontSize: "16px",
   fontWeight: "700",
+  cursor: "pointer",
+};
+
+const lightButton = {
+  padding: "13px 22px",
+  border: "none",
+  borderRadius: "8px",
+  background: "#ffffff",
+  color: "#111827",
+  fontWeight: "700",
+  fontSize: "15px",
   cursor: "pointer",
 };
 
