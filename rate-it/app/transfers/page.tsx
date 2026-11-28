@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { createClient } from "@supabase/supabase-js";
 
 const supabase = createClient(
@@ -25,6 +26,13 @@ type Transfer = {
   seats?: number;
   description?: string;
   status?: string;
+  premium_status?: unknown;
+  subscription_status?: unknown;
+  is_premium?: boolean;
+  premium?: boolean;
+  premium_expires_at?: unknown;
+  subscription_expires_at?: unknown;
+  featured_until?: unknown;
   [key: string]: unknown;
 };
 
@@ -117,15 +125,21 @@ export default function TransfersPage() {
     <main className="min-h-screen bg-gray-50">
       <header className="bg-white border-b px-5 py-5">
         <div className="max-w-7xl mx-auto flex flex-wrap justify-between items-center gap-4">
-          <a href="/" className="text-2xl font-bold text-blue-700">
+          <Link href="/" className="text-2xl font-bold text-blue-700">
             Rate-It
-          </a>
+          </Link>
 
-          <nav className="flex flex-wrap gap-4 text-sm">
-            <a href="/hotels">Hotels</a>
-            <a href="/properties">Properties</a>
-            <a href="/cars">Cars</a>
-            <a href="/transfers">Transfers</a>
+          <nav className="flex flex-wrap items-center gap-4 text-sm">
+            <Link href="/hotels">Hotels</Link>
+            <Link href="/properties">Properties</Link>
+            <Link href="/cars">Cars</Link>
+            <Link href="/transfers">Transfers</Link>
+            <Link
+              href="/providers/dashboard/login"
+              className="font-semibold text-blue-700"
+            >
+              Provider Login
+            </Link>
           </nav>
         </div>
       </header>
@@ -151,6 +165,42 @@ export default function TransfersPage() {
         />
       </section>
 
+      {/* Airport transfer provider registration */}
+      <section className="max-w-7xl mx-auto px-5 pt-10">
+        <div className="rounded-2xl bg-white border border-blue-100 shadow-sm p-7 md:p-10 text-center">
+          <h2 className="text-2xl md:text-3xl font-bold text-gray-900 mb-3">
+            Are you an Airport Transfer Provider?
+          </h2>
+
+          <p className="text-gray-600 max-w-2xl mx-auto mb-6">
+            Join Rate-It and showcase your airport pickup and transfer
+            services to customers across East Africa. Register your
+            business and manage your services and bookings through
+            your provider dashboard.
+          </p>
+
+          <div className="flex flex-wrap justify-center gap-4">
+            <Link
+              href="/providers/dashboard/signup"
+              className="rounded-lg bg-blue-700 px-7 py-3 font-semibold text-white hover:bg-blue-800"
+            >
+              Register as a Provider
+            </Link>
+
+            <Link
+              href="/providers/dashboard/login"
+              className="rounded-lg border border-blue-700 px-7 py-3 font-semibold text-blue-700 hover:bg-blue-50"
+            >
+              Provider Login
+            </Link>
+          </div>
+
+          <p className="text-sm text-green-700 font-medium mt-5">
+            Register your provider business for FREE.
+          </p>
+        </div>
+      </section>
+
       <section className="max-w-7xl mx-auto px-5 py-10">
         <h2 className="text-2xl font-bold mb-7">
           Airport transfer services
@@ -169,6 +219,13 @@ export default function TransfersPage() {
             <p className="text-gray-500">
               New airport transfer providers will appear here.
             </p>
+
+            <Link
+              href="/providers/dashboard/signup"
+              className="inline-block mt-5 bg-blue-700 text-white rounded-lg px-6 py-3 font-semibold"
+            >
+              Register your transfer service
+            </Link>
           </div>
         )}
 
@@ -249,14 +306,14 @@ export default function TransfersPage() {
                       </p>
                     </div>
 
-                    <a
+                    <Link
                       href={`/transfers/book?service=${encodeURIComponent(
                         String(service.id)
                       )}`}
                       className="bg-blue-700 text-white rounded-lg px-5 py-3 font-semibold"
                     >
                       Book transfer
-                    </a>
+                    </Link>
                   </div>
                 </div>
               </article>
@@ -264,6 +321,22 @@ export default function TransfersPage() {
           })}
         </div>
       </section>
+
+      <footer className="bg-blue-950 text-white px-5 py-8 mt-12">
+        <div className="max-w-7xl mx-auto flex flex-wrap justify-between items-center gap-4">
+          <p>© {new Date().getFullYear()} Rate-It. Discover. Compare. Stay.</p>
+
+          <div className="flex flex-wrap gap-5 text-sm">
+            <Link href="/contact">Contact</Link>
+            <Link href="/providers/dashboard/signup">
+              Provider Registration
+            </Link>
+            <Link href="/providers/dashboard/login">
+              Provider Login
+            </Link>
+          </div>
+        </div>
+      </footer>
     </main>
   );
 }
